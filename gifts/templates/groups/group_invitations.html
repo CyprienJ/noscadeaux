@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Invite people" %} – {{ group.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-9 col-xl-8">
+            <div class="text-center mb-4">
+                <div class="text-uppercase small fw-semibold text-muted mb-2" style="letter-spacing:.08em">
+                    {% trans "Your group is ready" %}
+                </div>
+                <h1 class="h2 fw-bold mb-2">{% blocktrans with name=group.name %}Invite people to {{ name }}{% endblocktrans %}</h1>
+                <p class="text-muted mb-0">{% trans "Share the private link or send an invitation by email." %}</p>
+            </div>
+
+            <section class="card border-0 shadow-sm rounded-5 mb-4">
+                <div class="card-body p-4">
+                    <h2 class="h5 fw-bold"><i class="bi bi-link-45deg me-2" aria-hidden="true"></i>{% trans "Private invitation link" %}</h2>
+                    <p class="text-muted small">{% trans "Anyone with this link can preview the group and ask to join it." %}</p>
+                    <label for="invitationLink" class="visually-hidden">{% trans "Invitation link" %}</label>
+                    <div class="input-group mb-3">
+                        <input id="invitationLink" class="form-control" value="{{ invitation_url }}" readonly>
+                        <button type="button" class="btn btn-outline-primary" onclick="copyInvitation()">
+                            <i class="bi bi-copy me-1" aria-hidden="true"></i>{% trans "Copy" %}
+                        </button>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-primary rounded-pill" onclick="shareInvitation()">
+                            <i class="bi bi-share me-1" aria-hidden="true"></i>{% trans "Share" %}
+                        </button>
+                        <form method="post" action="{% url 'regenerate_group_invitation_token' group.id %}"
+                              data-confirm="{% trans 'The previous invitation link will stop working. Continue?' %}"
+                              onsubmit="return confirm(this.dataset.confirm)">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-secondary rounded-pill">
+                                <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>{% trans "Generate a new link" %}
+                            </button>
+                        </form>
+                    </div>
+                    <output id="shareStatus" class="d-block small text-success mt-3 mb-0" aria-live="polite"></output>
+                    <hr>
+                    <p class="small text-muted mb-0">
+                        {% trans "Short code to enter manually:" %}
+                        <strong class="ms-1">{{ group.group_token }}</strong>
+                    </p>
+                </div>
+            </section>
+
+            <section class="card border-0 shadow-sm rounded-5 mb-4">
+                <div class="card-body p-4">
+                    <h2 class="h5 fw-bold"><i class="bi bi-envelope me-2" aria-hidden="true"></i>{% trans "Invite by email" %}</h2>
+                    {% if email_invites_enabled %}
+                        <p class="text-muted small">{% trans "Each person receives a separate message. Recipients never see the other addresses." %}</p>
+                        <form method="post" action="{% url 'send_group_invitation_emails' group.id %}" novalidate>
+                            {% csrf_token %}
+                            {% if form.non_field_errors %}
+                                <div class="alert alert-danger rounded-4" role="alert">{{ form.non_field_errors }}</div>
+                            {% endif %}
+                            <label for="{{ form.emails.id_for_label }}" class="form-label fw-semibold">{{ form.emails.label }}</label>
+                            {{ form.emails }}
+                            <div class="form-text" id="{{ form.emails.id_for_label }}_helptext">{{ form.emails.help_text }}</div>
+                            {% for error in form.emails.errors %}
+                                <div class="text-danger small mt-1" role="alert">{{ error }}</div>
+                            {% endfor %}
+                            <button type="submit" class="btn btn-primary rounded-pill mt-3">
+                                <i class="bi bi-send me-1" aria-hidden="true"></i>{% trans "Send invitations" %}
+                            </button>
+                        </form>
+                    {% else %}
+                        <p class="text-muted mb-0">{% trans "Email sending is disabled for the public demo." %}</p>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="card border-0 shadow-sm rounded-5 mb-4">
+                <div class="card-body p-4">
+                    <div>
+                        <h2 class="h5 fw-bold mb-1">{% trans "Add someone without an account" %}</h2>
+                        <p class="text-muted small mb-sm-0">{% trans "You can manage a gift list for a child or relative who does not use the application." %}</p>
+                    </div>
+                    <p class="small text-muted">{% trans "Any group member can add or modify wishes for this person." %}</p>
+                    <form method="post" action="{% url 'add_managed_member' group.id %}" class="mt-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="return_to" value="invitations">
+                        <label for="managedName" class="form-label">{% trans "First name" %}</label>
+                        <input id="managedName" name="name" maxlength="100" required class="form-control rounded-4">
+                        <button type="submit" class="btn btn-outline-primary rounded-pill mt-3">{% trans "Add a person" %}</button>
+                    </form>
+                    {% for person in managed_members %}
+                        <div class="border-top mt-3 pt-3">
+                            <a href="{% url 'view_managed_list' group.id person.id %}" class="d-flex align-items-center gap-2 mb-2">
+                                <span class="nc-member-avatar" style="background:{{ person.color }}">{{ person.name|first|upper }}</span>
+                                {{ person.name }} — {% trans "View the list" %}
+                            </a>
+                            <details>
+                                <summary>{% trans "Manage" %} {{ person.name }}</summary>
+                                <form method="post" action="{% url 'rename_managed_member' group.id person.id %}" class="mt-2">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="return_to" value="invitations">
+                                    <label for="managedName{{ person.id }}" class="form-label">{% trans "First name" %}</label>
+                                    <input id="managedName{{ person.id }}" name="name" value="{{ person.name }}" maxlength="100" required class="form-control">
+                                    <button class="btn btn-outline-primary mt-2" type="submit">{% trans "Save changes" %}</button>
+                                </form>
+                                <form method="post" action="{% url 'delete_managed_member' group.id person.id %}" class="mt-3">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="return_to" value="invitations">
+                                    <label class="d-block"><input type="checkbox" required> {% trans "Permanently delete this person and their gift list." %}</label>
+                                    <button class="btn btn-outline-danger mt-2" type="submit">{% trans "Delete" %}</button>
+                                </form>
+                            </details>
+                        </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <div class="text-center">
+                <a href="{% url 'group_detail' group.id %}" class="btn btn-primary btn-lg rounded-pill px-5">
+                    {% trans "Finish and open the group" %}
+                    <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% trans 'Select and copy the link manually.' as manual_copy %}
+{% trans 'Invitation link copied.' as link_copied %}
+{% trans 'Join my group on Nos Cadeaux.' as share_message %}
+{% trans 'Invitation shared.' as link_shared %}
+<script>
+    const invitationUrl = "{{ invitation_url|escapejs }}";
+    const shareStatus = document.getElementById("shareStatus");
+
+    async function copyInvitation() {
+        try {
+            await navigator.clipboard.writeText(invitationUrl);
+        } catch (error) {
+            const input = document.getElementById("invitationLink");
+            input.select();
+            try {
+                if (!document.execCommand("copy")) throw new Error("copy unavailable");
+            } catch (copyError) {
+                shareStatus.textContent = "{{ manual_copy|escapejs }}";
+                return;
+            }
+        }
+        shareStatus.textContent = "{{ link_copied|escapejs }}";
+    }
+
+    async function shareInvitation() {
+        if (!navigator.share) {
+            await copyInvitation();
+            return;
+        }
+        try {
+            await navigator.share({
+                title: "{{ group.name|escapejs }}",
+                text: "{{ share_message|escapejs }}",
+                url: invitationUrl,
+            });
+            shareStatus.textContent = "{{ link_shared|escapejs }}";
+        } catch (error) {
+            if (error.name !== "AbortError") await copyInvitation();
+        }
+    }
+</script>
+{% endblock %}

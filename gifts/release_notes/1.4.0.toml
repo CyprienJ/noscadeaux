@@ -1,0 +1,26 @@
+version = "1.4.0"
+date = 2026-09-08
+
+[fr]
+title = "Vos amis vous rejoignent plus facilement"
+content = """
+Il est maintenant plus simple pour vos amis de créer un compte et de vous rejoindre !
+Un parcours guidé les accompagne à chaque étape, de la validation de leur e-mail à l’arrivée dans votre groupe.
+Leur photo et leur anniversaire restent facultatifs, et ils peuvent reprendre leur inscription plus tard.
+
+Pour les inviter, partagez le lien privé de votre groupe ou envoyez-leur une invitation par e-mail.
+Vous pouvez aussi ajouter plusieurs proches sans compte et gérer leurs listes de cadeaux ensemble,
+avec tous les membres du groupe. Si vous supprimez une personne sans compte, sa liste est définitivement supprimée.
+"""
+
+[en]
+title = "It’s easier for your friends to join you"
+content = """
+It’s now easier for your friends to create an account and join you!
+A guided sign-up process takes them from verifying their email to joining your group.
+Their photo and birthday remain optional, and they can pick up where they left off later.
+
+To invite them, share your group’s private link or send them an email invitation.
+You can also add several loved ones without accounts and manage their gift lists together
+with everyone in the group. Deleting a person without an account permanently deletes their list.
+"""

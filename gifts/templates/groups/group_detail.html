@@ -131,12 +131,11 @@
                     </button>
 
                     <!-- Invite link button -->
-                    <button type="button"
-                            class="nc-btn nc-btn--ghost nc-btn--sm"
-                            onclick="copyInviteLink('{{ group.group_token }}', this)">
+                    <a href="{% url 'group_invitations' group.id %}"
+                       class="nc-btn nc-btn--ghost nc-btn--sm">
                         <i class="bi bi-person-plus-fill" aria-hidden="true"></i>
-                        <span class="btn-text">{% trans "Invite link" %}</span>
-                    </button>
+                        <span class="btn-text">{% trans "Invite people" %}</span>
+                    </a>
 
                 </div>
             </div>
@@ -246,6 +245,9 @@
                 document.getElementById('managedMemberDeleteSection').classList.remove('nc-danger-confirm');
                 document.getElementById('managedMemberDeleteActions').classList.add('d-none');
             });
+            if (new URLSearchParams(globalThis.location.search).get('add_member') === '1') {
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('addManagedMemberModal')).show();
+            }
         });
 
         function copyToClipboard(text, element) {
@@ -271,21 +273,5 @@
             });
         }
 
-        function copyInviteLink(token, btn) {
-            const url = globalThis.location.origin + "/group/join/" + token + "/";
-            const original = btn.innerHTML;
-            navigator.clipboard.writeText(url).then(() => {
-                btn.innerHTML = '<i class="bi bi-check2"></i> {% trans "Copied!" %}';
-                btn.style.background = 'var(--nc-sage-light)';
-                btn.style.borderColor = 'var(--nc-sage)';
-                btn.style.color = 'var(--nc-sage)';
-                setTimeout(() => {
-                    btn.innerHTML = original;
-                    btn.style.background = '';
-                    btn.style.borderColor = '';
-                    btn.style.color = '';
-                }, 2000);
-            });
-        }
     </script>
 {% endblock %}

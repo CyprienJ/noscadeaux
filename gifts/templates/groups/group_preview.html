@@ -8,8 +8,8 @@
 
     {# Back link #}
     <div class="nc-invitation-back">
-        <a href="{% url 'dashboard' %}">
-            <i class="bi bi-chevron-left" style="font-size:13px"></i> {% trans "Back to home" %}
+        <a href="{% if onboarding_incomplete %}{% url 'onboarding_group' %}{% elif request.user.is_authenticated %}{% url 'dashboard' %}{% else %}{% url 'welcome' %}{% endif %}">
+            <i class="bi bi-chevron-left" style="font-size:13px"></i> {% trans "Back" %}
         </a>
     </div>
 
@@ -27,7 +27,12 @@
 
             {# Group pill #}
             <div class="nc-invitation-group-pill">
-                <div class="nc-invitation-group-avatar">{{ group.name|first|upper }}</div>
+                {% if group.display_image_url %}
+                    <img src="{{ group.display_image_url }}" alt="{{ group.name }}"
+                         class="nc-invitation-group-avatar" style="object-fit:cover">
+                {% else %}
+                    <div class="nc-invitation-group-avatar">{{ group.name|first|upper }}</div>
+                {% endif %}
                 <div style="text-align:left">
                     <div class="nc-invitation-group-name">{{ group.name }}</div>
                     <div class="nc-invitation-group-count">
@@ -37,18 +42,34 @@
             </div>
 
             {# CTA buttons #}
-            <a href="{% url 'join_group_confirm' group.group_token %}"
-               class="nc-invitation-accept-btn">
-                <i class="bi bi-person-plus-fill" style="font-size:16px"></i>
-                {% trans "Accept invitation" %}
-            </a>
-            <button class="nc-invitation-decline-btn" onclick="ncDeclineInvitation()">
-                {% trans "Decline invitation" %}
-            </button>
+            {% if request.user.is_authenticated %}
+                <form method="post" action="{{ accept_url }}">
+                    {% csrf_token %}
+                    <button type="submit" class="nc-invitation-accept-btn w-100 border-0">
+                        <i class="bi bi-person-plus-fill" style="font-size:16px"></i>
+                        {% if already_member %}{% trans "Continue to the group" %}{% else %}{% trans "Accept invitation" %}{% endif %}
+                    </button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}?next={{ request.get_full_path|urlencode }}"
+                   class="nc-invitation-accept-btn">
+                    <i class="bi bi-box-arrow-in-right" style="font-size:16px"></i>
+                    {% trans "Log in to accept" %}
+                </a>
+                <a href="{% url 'register' %}" class="btn btn-outline-primary rounded-pill w-100 mt-2">
+                    {% trans "Create an account" %}
+                </a>
+            {% endif %}
+            <form method="post" action="{{ dismiss_url }}">
+                {% csrf_token %}
+                <button type="submit" class="nc-invitation-decline-btn w-100">
+                    {% trans "Decline invitation" %}
+                </button>
+            </form>
         </div>
 
         {# Members grid #}
-        {% if group.members.all %}
+        {% if show_members %}
             <div class="nc-invitation-members">
                 <div class="nc-invitation-members-title">{% trans "Members already in this group" %}</div>
                 <div class="nc-invitation-members-grid">
@@ -66,30 +87,5 @@
 
     </div>
 
-    {# ── Declined state (hidden until JS toggle) ── #}
-    <div id="nc-invite-declined" style="display:none; max-width:520px; width:100%">
-        <div class="nc-invitation-declined">
-            <div class="nc-invitation-declined-icon">
-                <i class="bi bi-x-lg"></i>
-            </div>
-            <h2 class="nc-invitation-declined-title">{% trans "Invitation declined" %}</h2>
-            <p class="nc-invitation-declined-desc">
-                {% blocktrans with name=group.name %}You have declined the invitation to join <strong>{{ name }}</strong>.{% endblocktrans %}
-            </p>
-            <a href="{% url 'dashboard' %}" style="font-size:13px; color:var(--nc-accent)">
-                {% trans "Back to home" %}
-            </a>
-        </div>
-    </div>
-
 </div>
-
-<script>
-    function ncDeclineInvitation() {
-        document.getElementById('nc-invite-pending').style.display = 'none';
-        const declined = document.getElementById('nc-invite-declined');
-        declined.style.display = 'block';
-        declined.style.animation = 'nc-fade-in 0.5s ease both';
-    }
-</script>
 {% endblock %}

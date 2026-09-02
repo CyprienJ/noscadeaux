@@ -1,5 +1,5 @@
 {% load i18n %}
-{% translate "Hi" %} {{ nickname }},
+{% if nickname %}{% translate "Hi" %} {{ nickname }},{% else %}{% translate "Hi" %},{% endif %}
 
 {% translate "Thanks for signing up for Nos Cadeaux!" %}
 

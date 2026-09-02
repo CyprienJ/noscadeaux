@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Set up your profile" %} – Nos cadeaux{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-xl-6">
+            <div class="card border-0 shadow-lg rounded-5 p-3 p-md-4">
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <div class="text-uppercase small fw-semibold text-muted mb-2" style="letter-spacing:.08em">
+                            {% trans "Step 2 of 3" %}
+                        </div>
+                        <h1 class="h2 fw-bold mb-2">{% trans "Tell us about yourself" %}</h1>
+                        <p class="text-muted mb-0">
+                            {% trans "This information helps members of your groups recognize you." %}
+                        </p>
+                    </div>
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger rounded-4" role="alert">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    <div class="rounded-4 bg-body-tertiary p-3 mb-4 d-flex align-items-center gap-3">
+                        {% if request.user.display_avatar_url %}
+                            <img src="{{ request.user.display_avatar_url }}"
+                                 alt="{{ request.user.nickname }}"
+                                 class="rounded-circle border bg-body"
+                                 style="width:72px;height:72px;object-fit:cover">
+                        {% else %}
+                            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:72px;height:72px;background:var(--nc-accent);color:white;font-size:1.6rem">
+                                {% if request.user.nickname %}
+                                    {{ request.user.nickname|first|upper }}
+                                {% else %}
+                                    <i class="bi bi-person" aria-hidden="true"></i>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                        <div>
+                            <div class="fw-semibold">{% trans "Profile picture" %}</div>
+                            <div class="small text-muted mb-2">
+                                {% trans "Optional — it helps members of your groups recognize you." %}
+                            </div>
+                            <a href="{% url 'photo_upload_profile' %}"
+                               class="btn btn-sm btn-outline-secondary rounded-pill">
+                                <i class="bi bi-camera me-1" aria-hidden="true"></i>
+                                {% if request.user.display_avatar_url %}{% trans "Change photo" %}{% else %}{% trans "Choose a photo" %}{% endif %}
+                            </a>
+                        </div>
+                    </div>
+
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+
+                        <div class="mb-4">
+                            <label for="{{ form.nickname.id_for_label }}" class="form-label fw-semibold">
+                                {{ form.nickname.label }} <span aria-hidden="true">*</span>
+                            </label>
+                            {{ form.nickname }}
+                            <div class="form-text">{% trans "This name is visible to people in your groups." %}</div>
+                            {% for error in form.nickname.errors %}
+                                <div class="text-danger small mt-1" role="alert">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <fieldset class="mb-4">
+                            <legend class="form-label fw-semibold mb-1">{% trans "Birthday" %}</legend>
+                            <div class="form-text mt-0 mb-3">
+                                {% trans "Optional — used for birthday reminders. We do not ask for the year." %}
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-sm-7">
+                                    <label for="{{ form.birthday_month.id_for_label }}" class="visually-hidden">
+                                        {{ form.birthday_month.label }}
+                                    </label>
+                                    {{ form.birthday_month }}
+                                    {% for error in form.birthday_month.errors %}
+                                        <div class="text-danger small mt-1" role="alert">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-sm-5">
+                                    <label for="{{ form.birthday_day.id_for_label }}" class="visually-hidden">
+                                        {{ form.birthday_day.label }}
+                                    </label>
+                                    {{ form.birthday_day }}
+                                    {% for error in form.birthday_day.errors %}
+                                        <div class="text-danger small mt-1" role="alert">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100 rounded-pill">
+                            {% trans "Continue" %}
+                            <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

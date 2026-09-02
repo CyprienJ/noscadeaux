@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import Gift, Group, Reservation, SharedGiftPublication, SharedList, SharedListMembership, User
+from .onboarding import CURRENT_ONBOARDING_VERSION
 
 
 class SharedListTests(TestCase):
@@ -18,9 +19,17 @@ class SharedListTests(TestCase):
             password="password",
             nickname="Alice",
             is_verified=True,
+            onboarding_version=CURRENT_ONBOARDING_VERSION,
+            profile_completed_at=timezone.now(),
         )
         self.bob = User.objects.create_user(
-            email="bob@example.com", username="bob@example.com", password="password", nickname="Bob", is_verified=True
+            email="bob@example.com",
+            username="bob@example.com",
+            password="password",
+            nickname="Bob",
+            is_verified=True,
+            onboarding_version=CURRENT_ONBOARDING_VERSION,
+            profile_completed_at=timezone.now(),
         )
         self.carol = User.objects.create_user(
             email="carol@example.com",
@@ -28,6 +37,8 @@ class SharedListTests(TestCase):
             password="password",
             nickname="Carol",
             is_verified=True,
+            onboarding_version=CURRENT_ONBOARDING_VERSION,
+            profile_completed_at=timezone.now(),
         )
         self.family = Group.objects.create(name="Alice family", created_by=self.alice)
         self.family.members.add(self.alice, self.carol)

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block content %}
+<div class="container py-5">
+    <h1 class="h2">{% trans "This verification link is invalid or has expired." %}</h1>
+    {% if request.user.is_authenticated and not request.user.is_verified %}
+        <p>{% trans "Request a new email to continue setting up your account." %}</p>
+        <form method="post" action="{% url 'resend_verification' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary">{% trans "Resend verification email" %}</button>
+        </form>
+    {% else %}
+        <p>{% trans "Log in to request another email. If your account has expired, register again." %}</p>
+        <a class="btn btn-primary" href="{% url 'login' %}">{% trans "Log in" %}</a>
+        <a class="btn btn-outline-secondary" href="{% url 'register' %}">{% trans "Register" %}</a>
+    {% endif %}
+</div>
+{% endblock %}

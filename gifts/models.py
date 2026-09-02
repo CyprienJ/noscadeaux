@@ -1,4 +1,5 @@
 import os
+import secrets
 import uuid
 
 from django.contrib.auth.models import AbstractUser
@@ -22,10 +23,15 @@ def get_avatar_path(instance, filename):
     return os.path.join("profiles", str(instance.id), filename)
 
 
+def generate_group_invitation_token():
+    return secrets.token_urlsafe(32)
+
+
 class Group(models.Model):
     name = models.CharField(max_length=100)
     members = models.ManyToManyField("User", related_name="gift_groups")
     group_token = models.CharField(max_length=12, unique=True, blank=True)
+    invitation_token = models.CharField(max_length=64, unique=True, default=generate_group_invitation_token)
     created_at = models.DateTimeField(default=timezone.now)
     created_by = models.ForeignKey("User", on_delete=models.SET_NULL, null=True, related_name="owned_groups")
     description = models.TextField(blank=True)
@@ -58,6 +64,18 @@ class Group(models.Model):
 
         super().save(*args, **kwargs)
 
+    def has_real_members(self):
+        """True while at least one non-managed member remains."""
+        return self.members.filter(is_managed=False).exists()
+
+    def delete_if_abandoned(self):
+        """Delete the group (cascading to its managed people) once its last
+        non-managed member is gone. Returns True when it was deleted."""
+        if self.has_real_members():
+            return False
+        self.delete()
+        return True
+
 
 class User(AbstractUser):
     email = models.EmailField(
@@ -82,6 +100,11 @@ class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     is_managed = models.BooleanField(default=False)
     is_demo = models.BooleanField(default=False)
+    onboarding_version = models.PositiveSmallIntegerField(default=0)
+    onboarding_completed_at = models.DateTimeField(blank=True, null=True)
+    profile_completed_at = models.DateTimeField(blank=True, null=True)
+    pending_group_invite_token = models.CharField(max_length=128, blank=True, default="")
+    verification_email_sent_at = models.DateTimeField(blank=True, null=True)
     last_seen_version = models.CharField(max_length=20, blank=True, default="")
     managed_by = models.ForeignKey("self", on_delete=models.CASCADE, related_name="sub_accounts", blank=True, null=True)
     subscriptions = models.ManyToManyField(
@@ -99,6 +122,19 @@ class User(AbstractUser):
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
 
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            # onboarding_completed_at is set if and only if the account has
+            # reached at least onboarding version 1. See gifts/onboarding.py.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(onboarding_completed_at__isnull=False, onboarding_version__gte=1)
+                    | models.Q(onboarding_completed_at__isnull=True, onboarding_version=0)
+                ),
+                name="onboarding_completed_iff_versioned",
+            ),
+        ]
+
     @property
     def display_avatar_url(self):
         if self.avatar:
@@ -110,7 +146,21 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         self.email = self.email.lower()
         self.username = self.email
+        self._stamp_onboarding_completion(kwargs)
         super().save(*args, **kwargs)
+
+    def _stamp_onboarding_completion(self, save_kwargs):
+        """Uphold `onboarding_completed_iff_versioned`: any write that lifts
+        `onboarding_version` to >= 1 without a completion time gets one, so the
+        admin form (which exposes the raw field) and `complete_onboarding()`
+        both stay valid. A partial `update_fields` save is widened to carry the
+        new timestamp. Downgrades are a deliberate admin action, left to code."""
+        if self.onboarding_version < 1 or self.onboarding_completed_at is not None:
+            return
+        self.onboarding_completed_at = timezone.now()
+        update_fields = save_kwargs.get("update_fields")
+        if update_fields is not None:
+            save_kwargs["update_fields"] = {*update_fields, "onboarding_completed_at"}
 
     @property
     def birthday(self):
@@ -131,6 +181,49 @@ class User(AbstractUser):
         month, day = str(value).split("-")[-2:]
         self.birthday_month = int(month)
         self.birthday_day = int(day)
+
+
+class GroupInvitationDispatch(models.Model):
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="invitation_dispatches")
+    sender = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="invitation_dispatches", null=True)
+    requested_count = models.PositiveSmallIntegerField()
+    sent_count = models.PositiveSmallIntegerField(default=0)
+    failed_count = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    def __str__(self):
+        return f"{self.group}: {self.sent_count}/{self.requested_count}"
+
+
+class AuthThrottleEvent(models.Model):
+    """One row per rate-limited auth attempt (register, resend). Stores a salted
+    hash of the client IP, never the address itself, and is pruned by the
+    scheduler (`cleanup_auth_throttle_events`)."""
+
+    ACTION_REGISTER = "register"
+    ACTION_RESEND_VERIFICATION = "resend_verification"
+
+    ip_hash = models.CharField(max_length=64)
+    action = models.CharField(max_length=32)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            # Matches the sliding-window count in gifts.auth_throttle exactly.
+            models.Index(fields=["action", "ip_hash", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.action} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class OnboardingDailyCount(models.Model):
+    day = models.DateField()
+    event = models.CharField(max_length=32)
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["day", "event"], name="unique_onboarding_daily_event")]
 
 
 class Subscription(models.Model):
@@ -385,15 +478,6 @@ class GiftComment(models.Model):
 
     def __str__(self):
         return f"{self.author.nickname} → {self.gift.title}"
-
-
-MANAGED_MEMBER_COLORS = [
-    "oklch(60% 0.14 100)",
-    "oklch(60% 0.14 180)",
-    "oklch(60% 0.14 230)",
-    "oklch(60% 0.14 290)",
-    "oklch(60% 0.14 340)",
-]
 
 
 class ManagedMember(models.Model):

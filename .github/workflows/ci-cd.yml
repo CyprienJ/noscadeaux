@@ -101,6 +101,8 @@ jobs:
           node-version: 22
       - name: Run extension tests
         run: node --test firefox-extension/tests/*.test.js
+      - name: Run front-end tests
+        run: node --test gifts/tests_js/*.test.cjs
 
   build-and-push:
     if: >-
