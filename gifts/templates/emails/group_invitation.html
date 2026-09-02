@@ -1,0 +1,17 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}">
+<head><meta charset="utf-8"><title>{% trans "Group invitation" %}</title></head>
+<body style="margin:0;padding:24px;background:#f8f9fa;font-family:Arial,sans-serif;color:#212529">
+    <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;padding:32px">
+        <h1 style="font-size:24px;margin-top:0">{% trans "You are invited!" %}</h1>
+        <p>{% blocktrans with inviter=inviter_name name=group.name %}<strong>{{ inviter }}</strong> invites you to join the group <strong>{{ name }}</strong> on Nos Cadeaux.{% endblocktrans %}</p>
+        <p style="margin:28px 0">
+            <a href="{{ invitation_url }}" style="background:#e11d48;color:#fff;text-decoration:none;padding:12px 20px;border-radius:999px;display:inline-block">
+                {% trans "View the invitation" %}
+            </a>
+        </p>
+        <p style="font-size:13px;color:#6c757d">{% trans "If you were not expecting this invitation, you can ignore this email." %}</p>
+    </div>
+</body>
+</html>

@@ -28,16 +28,17 @@
                                class="form-control form-control-lg rounded-pill border-1 p-3"
                                placeholder="{% trans 'Your email' %}"
                                aria-label="{% trans 'Your email' %}"
-                               value="{{ form.username.value|default:'' }}">
+                               autocomplete="username" required value="{{ form.username.value|default:'' }}">
                     </div>
                     <div class="mb-4">
-                        <label for="password-field" class="form-label fw-medium card-label">{% trans "Password" %}</label>
-                        <div id="password-field" class="input-group">
+                        <label for="id_password" class="form-label fw-medium card-label">{% trans "Password" %}</label>
+                        <div class="input-group">
                             <input type="password" name="password" id="id_password"
                                    class="form-control rounded-start-pill border-1 p-3 border-0"
                                    placeholder="{% trans 'Your password' %}"
-                                   aria-label="{% trans 'Your password' %}">
+                                   autocomplete="current-password" required>
                             <button class="btn border-0 rounded-end-pill px-3" type="button"
+                                    aria-label="{% trans 'Show password' %}" aria-pressed="false"
                                     onclick="togglePassword('id_password', this)">
                                 <i class="bi bi-eye text-muted"></i>
                             </button>
@@ -74,6 +75,7 @@
         function togglePassword(fieldId, btn) {
             const field = document.getElementById(fieldId);
             const icon = btn.querySelector('i');
+            btn.setAttribute('aria-pressed', field.type === 'password' ? 'true' : 'false');
             if (field.type === "password") {
                 field.type = "text";
                 icon.classList.replace('bi-eye', 'bi-eye-slash');

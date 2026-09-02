@@ -17,6 +17,7 @@ from gifts.models import (
     SharedListMembership,
     User,
 )
+from gifts.onboarding import CURRENT_ONBOARDING_VERSION
 
 
 class Command(BaseCommand):
@@ -55,6 +56,9 @@ class Command(BaseCommand):
             is_demo=True,
             is_verified=True,
             is_active=active,
+            onboarding_version=CURRENT_ONBOARDING_VERSION,
+            onboarding_completed_at=timezone.now(),
+            profile_completed_at=timezone.now(),
         )
         user.set_unusable_password()
         user.save(update_fields=["password"])

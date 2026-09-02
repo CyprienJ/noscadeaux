@@ -19,11 +19,11 @@
                 </p>
                 
                 <p class="mb-4">
-                    {% trans "You must click this link to access your dashboard." %}
+                    {% trans "Click this link to continue setting up your account." %}
                     <br>
-                    <small class="text-danger">
+                    {% if not request.user.onboarding_version %}<small class="text-danger">
                         {% trans "Note: Unverified accounts are automatically deleted after 30 minutes." %}
-                    </small>
+                    </small>{% endif %}
                 </p>
                 
                 <div class="alert alert-info rounded-4 border-0 mb-4">

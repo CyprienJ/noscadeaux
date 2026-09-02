@@ -1,188 +1,225 @@
+from io import StringIO
 from unittest.mock import patch
 
-from django.db import connection
-from django.db.migrations.executor import MigrationExecutor
-from django.test import TestCase, TransactionTestCase
+from django.core.exceptions import PermissionDenied
+from django.core.management import call_command
+from django.db import IntegrityError
+from django.test import Client, TestCase
 from django.urls import reverse
 
-from .models import Gift, Group, ManagedMember, User
+from gifts.managed_members import MANAGED_MEMBER_COLORS, create_managed_member
+from gifts.models import Gift, Group, ManagedMember, User
+from gifts.tests import create_users
 
 
-class ManagedMemberManagementTests(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.user = User.objects.create_user(
-            username="member", email="member@example.com", nickname="Member", is_verified=True
-        )
-        cls.outsider = User.objects.create_user(
-            username="outsider", email="outsider@example.com", nickname="Outsider", is_verified=True
-        )
-        cls.group = Group.objects.create(name="Family", created_by=cls.user)
-        cls.group.members.add(cls.user)
-
+class ManagedPeopleTest(TestCase):
     def setUp(self):
-        self.client.force_login(self.user)
+        self.owner, self.member, self.outsider = create_users()
+        self.group = Group.objects.create(name="Family", created_by=self.owner)
+        self.group.members.add(self.owner, self.member)
+        self.client.force_login(self.owner)
 
-    def add_member(self):
-        response = self.client.post(reverse("add_managed_member", args=[self.group.pk]), {"name": "Camille"})
-        self.assertEqual(response.status_code, 302)
-        return self.group.managed_members.get()
+    def test_add_two_people_from_invitations_and_keep_their_lists_accessible(self):
+        for name in ["Alice", "Bob"]:
+            response = self.client.post(
+                reverse("add_managed_member", args=[self.group.pk]),
+                {"name": name, "return_to": "invitations"},
+                follow=True,
+            )
+            self.assertRedirects(response, reverse("group_invitations", args=[self.group.pk]))
+            self.assertContains(response, name)
+        self.assertEqual(self.group.managed_members.count(), 2)
+        person = self.group.managed_members.first()
+        self.assertFalse(person.user.is_active)
+        self.assertFalse(person.user.has_usable_password())
+        self.assertIn(person.color, MANAGED_MEMBER_COLORS)
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(reverse("view_list", args=[person.user_id])).status_code, 200)
 
-    def test_creation_exposes_management_on_group_and_list_pages(self):
-        member = self.add_member()
-        self.assertEqual(member.user.nickname, "Camille")
-        self.assertTrue(member.user.is_managed)
-        self.assertFalse(member.user.is_active)
-        self.assertTrue(self.group.members.filter(pk=member.user_id).exists())
-        self.assertTrue(member.color)
-
-        for url in (
-            reverse("group_detail", args=[self.group.pk]),
-            f"{reverse('view_list', args=[member.user_id])}?from_group={self.group.pk}",
-        ):
-            with self.subTest(url=url):
-                response = self.client.get(url)
-                self.assertContains(response, 'class="nc-member-manage-btn"')
-                self.assertContains(response, reverse("rename_managed_member", args=[self.group.pk, member.pk]))
-                self.assertContains(response, reverse("delete_managed_member", args=[self.group.pk, member.pk]))
-                self.assertContains(response, "function openManageManagedModal(")
-
-    def test_creation_rolls_back_when_profile_cannot_be_created(self):
+    def test_creation_rolls_back_when_profile_or_membership_fails(self):
+        original_count = User.objects.count()
         with (
-            patch("gifts.groups.ManagedMember.objects.create", side_effect=RuntimeError("Profile creation failed")),
-            self.assertRaises(RuntimeError),
+            patch("gifts.managed_members.ManagedMember.objects.create", side_effect=IntegrityError),
+            self.assertRaises(IntegrityError),
         ):
-            self.client.post(reverse("add_managed_member", args=[self.group.pk]), {"name": "Camille"})
-        self.assertFalse(User.objects.filter(is_managed=True).exists())
+            create_managed_member(self.group, self.owner, "Child")
+        self.assertEqual(User.objects.count(), original_count)
+        self.assertFalse(ManagedMember.objects.exists())
+        with (
+            patch.object(type(self.group.members), "add", side_effect=IntegrityError),
+            self.assertRaises(IntegrityError),
+        ):
+            create_managed_member(self.group, self.owner, "Child")
+        self.assertEqual(User.objects.count(), original_count)
+        self.assertFalse(ManagedMember.objects.exists())
 
-    def test_member_can_be_renamed(self):
-        member = self.add_member()
-        response = self.client.post(
-            reverse("rename_managed_member", args=[self.group.pk, member.pk]), {"name": "Charlie"}
-        )
-        self.assertEqual(response.status_code, 302)
-        member.refresh_from_db()
-        self.assertEqual(member.name, "Charlie")
-        self.assertEqual(member.user.nickname, "Charlie")
+    def test_invalid_names_and_outsiders_create_nothing(self):
+        for name in ["   ", "x" * 101]:
+            self.client.post(reverse("add_managed_member", args=[self.group.pk]), {"name": name})
+        with self.assertRaises(PermissionDenied):
+            create_managed_member(self.group, self.outsider, "Child")
+        self.assertFalse(ManagedMember.objects.exists())
 
-    def test_member_and_wishes_can_be_deleted(self):
-        member = self.add_member()
-        gift = Gift.objects.create(title="Book", owner=member.user, created_by=self.user)
-        response = self.client.post(reverse("delete_managed_member", args=[self.group.pk, member.pk]))
-        self.assertRedirects(response, reverse("group_detail", args=[self.group.pk]))
-        self.assertFalse(User.objects.filter(pk=member.user_id).exists())
-        self.assertFalse(ManagedMember.objects.filter(pk=member.pk).exists())
-        self.assertFalse(Gift.objects.filter(pk=gift.pk).exists())
-        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
-
-    def test_outsider_cannot_manage_member(self):
-        member = self.add_member()
-        self.client.force_login(self.outsider)
-        for action in ("rename_managed_member", "delete_managed_member"):
-            with self.subTest(action=action):
-                response = self.client.post(reverse(action, args=[self.group.pk, member.pk]), {"name": "Changed"})
-                self.assertEqual(response.status_code, 403)
-        member.refresh_from_db()
-        self.assertEqual(member.user.nickname, "Camille")
-
-    def test_management_rejects_another_group(self):
-        member = self.add_member()
-        other_group = Group.objects.create(name="Other family")
-        other_group.members.add(self.user)
-        for action in ("rename_managed_member", "delete_managed_member"):
-            with self.subTest(action=action):
-                response = self.client.post(reverse(action, args=[other_group.pk, member.pk]), {"name": "Changed"})
-                self.assertEqual(response.status_code, 404)
-        member.refresh_from_db()
-        self.assertEqual(member.user.nickname, "Camille")
-
-    def test_another_group_member_can_edit_and_delete_a_managed_members_gift(self):
-        member = self.add_member()
-        gift = Gift.objects.create(title="Book", owner=member.user, created_by=self.user)
-        self.group.members.add(self.outsider)
-        self.client.force_login(self.outsider)
-
-        response = self.client.post(reverse("edit_gift", args=[gift.pk]), {"title": "Illustrated book"})
-        self.assertEqual(response.status_code, 302)
+    def test_member_can_rename_edit_and_delete_person_and_gifts(self):
+        person = create_managed_member(self.group, self.owner, "Child")
+        gift = Gift.objects.create(owner=person.user, created_by=self.owner, title="Bike")
+        self.client.force_login(self.member)
+        self.client.post(reverse("rename_managed_member", args=[self.group.pk, person.pk]), {"name": "New name"})
+        person.refresh_from_db()
+        self.assertEqual(person.name, "New name")
+        self.assertEqual(person.user.nickname, "New name")
+        self.client.post(reverse("edit_gift", args=[gift.pk]), {"title": "New bike"})
         gift.refresh_from_db()
-        self.assertEqual(gift.title, "Illustrated book")
-
-        response = self.client.post(reverse("delete_gift", args=[gift.pk]))
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(gift.title, "New bike")
+        self.client.post(reverse("delete_managed_member", args=[self.group.pk, person.pk]))
+        self.assertFalse(User.objects.filter(pk=person.user_id).exists())
         self.assertFalse(Gift.objects.filter(pk=gift.pk).exists())
-        self.assertTrue(User.objects.filter(pk=member.user_id).exists())
+        self.assertFalse(ManagedMember.objects.filter(pk=person.pk).exists())
 
-    def test_outsider_cannot_edit_or_delete_a_managed_members_gift(self):
-        member = self.add_member()
-        gift = Gift.objects.create(title="Book", owner=member.user, created_by=self.user)
+    def test_outsider_cannot_mutate_person(self):
+        person = create_managed_member(self.group, self.owner, "Child")
         self.client.force_login(self.outsider)
-        for action in ("edit_gift", "delete_gift"):
-            with self.subTest(action=action):
-                response = self.client.post(reverse(action, args=[gift.pk]), {"title": "Changed"})
-                self.assertEqual(response.status_code, 403)
-        gift.refresh_from_db()
-        self.assertEqual(gift.title, "Book")
+        for route in ["rename_managed_member", "delete_managed_member"]:
+            self.assertEqual(
+                self.client.post(reverse(route, args=[self.group.pk, person.pk]), {"name": "Changed"}).status_code, 403
+            )
+        person.refresh_from_db()
+        self.assertEqual(person.name, "Child")
 
+    def test_group_deletion_removes_managed_identities(self):
+        person = create_managed_member(self.group, self.owner, "Child")
+        Gift.objects.create(owner=person.user, created_by=person.user, title="Bike")
+        self.group.delete()
+        self.assertFalse(User.objects.filter(pk=person.user_id).exists())
+        self.assertFalse(ManagedMember.objects.exists())
+        self.assertFalse(Gift.objects.exists())
+        self.assertTrue(User.objects.filter(pk=self.owner.pk).exists())
 
-class ManagedMemberProfileMigrationTests(TransactionTestCase):
-    migrate_from = [("gifts", "0038_shared_gift_publications")]
-    migrate_to = [("gifts", "0039_backfill_managed_member_profiles")]
+    def test_direct_user_deletion_has_no_recursive_cascade(self):
+        person = create_managed_member(self.group, self.owner, "Child")
+        person.user.delete()
+        self.assertFalse(ManagedMember.objects.exists())
 
-    def test_existing_accounts_are_repaired_without_changing_existing_profiles(self):
-        executor = MigrationExecutor(connection)
-        self.addCleanup(executor.migrate, executor.loader.graph.leaf_nodes())
-        executor.migrate(self.migrate_from)
-        apps = executor.loader.project_state(self.migrate_from).apps
-        users = apps.get_model("gifts", "User")
-        groups = apps.get_model("gifts", "Group")
-        profiles = apps.get_model("gifts", "ManagedMember")
-        gifts = apps.get_model("gifts", "Gift")
+    def test_group_survives_its_creators_deletion_while_members_remain(self):
+        person = create_managed_member(self.group, self.owner, "Child")
+        self.owner.delete()
+        self.assertTrue(Group.objects.filter(pk=self.group.pk).exists())
+        self.assertTrue(User.objects.filter(pk=person.user_id).exists())
+        self.assertTrue(User.objects.filter(pk=self.member.pk).exists())
 
-        group = groups.objects.create(name="Family", group_token="FAMILY")
-        other_group = groups.objects.create(name="Other family", group_token="OTHER")
-        managed = users.objects.create(
-            email="managed@example.com", username="managed", nickname="Camille", is_managed=True
+    def test_last_members_deletion_removes_the_group_and_its_managed_people(self):
+        self.group.members.remove(self.member)
+        person = create_managed_member(self.group, self.owner, "Child")
+        self.owner.delete()
+        self.assertFalse(Group.objects.filter(pk=self.group.pk).exists())
+        self.assertFalse(User.objects.filter(pk=person.user_id).exists())
+        self.assertFalse(ManagedMember.objects.exists())
+
+    def test_bulk_user_deletion_cleans_up_managed_people_without_recursion(self):
+        person = create_managed_member(self.group, self.owner, "Child")
+        User.objects.filter(pk__in=[self.owner.pk, person.user_id]).delete()
+        self.assertFalse(ManagedMember.objects.exists())
+        self.assertFalse(User.objects.filter(pk=person.user_id).exists())
+        self.assertTrue(Group.objects.filter(pk=self.group.pk).exists())
+
+    def test_bulk_deletion_of_all_real_members_removes_managed_identities(self):
+        person = create_managed_member(self.group, self.owner, "Child")
+        User.objects.filter(pk__in=[self.owner.pk, self.member.pk]).delete()
+        self.assertFalse(User.objects.filter(pk=person.user_id).exists())
+        self.assertFalse(Group.objects.filter(pk=self.group.pk).exists())
+
+    def test_managed_member_color_follows_rank_within_the_group(self):
+        other_group = Group.objects.create(name="Friends", created_by=self.owner)
+        other_group.members.add(self.owner)
+        # A person in another group must not shift this group's colour sequence.
+        create_managed_member(other_group, self.owner, "Elsewhere")
+
+        colors = [create_managed_member(self.group, self.owner, name).color for name in ("A", "B", "C")]
+
+        self.assertEqual(colors, list(MANAGED_MEMBER_COLORS[:3]))
+
+    def test_audit_managed_members_lists_ambiguous_identities(self):
+        healthy = create_managed_member(self.group, self.owner, "Child")
+        second_group = Group.objects.create(name="Friends", created_by=self.owner)
+        in_two_groups = User.objects.create_user(
+            email="ghost1@noscadeaux.internal",
+            username="ghost1@noscadeaux.internal",
+            password="!",
+            nickname="Ghost",
+            is_managed=True,
+            is_active=False,
         )
-        existing = users.objects.create(
-            email="existing@example.com", username="existing", nickname="Alex", is_managed=True
+        in_two_groups.gift_groups.add(self.group, second_group)
+        active_managed = User.objects.create_user(
+            email="ghost2@noscadeaux.internal",
+            username="ghost2@noscadeaux.internal",
+            password="!",
+            nickname="Active ghost",
+            is_managed=True,
+            is_active=True,
         )
-        regular = users.objects.create(
-            email="regular@example.com", username="regular", nickname="Regular", is_verified=True
+        active_managed.gift_groups.add(self.group)
+        without_group = User.objects.create_user(
+            email="ungrouped@noscadeaux.internal",
+            username="ungrouped@noscadeaux.internal",
+            is_managed=True,
+            is_active=False,
         )
-        orphan = users.objects.create(email="orphan@example.com", username="orphan", is_managed=True)
-        group.members.add(managed, existing, regular)
-        other_group.members.add(managed)
-        profile = profiles.objects.create(user=existing, group=group, name="Alex", color="#123456")
-        gift = gifts.objects.create(title="Book", owner=managed, created_by=regular)
+        repairable = User.objects.create_user(
+            email="repairable@noscadeaux.internal",
+            username="repairable@noscadeaux.internal",
+            is_managed=True,
+            is_active=False,
+        )
+        repairable.gift_groups.add(self.group)
 
-        self.client.force_login(User.objects.get(pk=regular.pk))
-        # Reproduce the reported refusal for an existing account missing its profile.
-        for action in ("edit_gift", "delete_gift"):
-            with self.subTest(before_repair=action):
-                response = self.client.post(reverse(action, args=[gift.pk]), {"title": "Illustrated book"})
-                self.assertEqual(response.status_code, 403)
+        out = StringIO()
+        with self.assertNumQueries(1):
+            call_command("audit_managed_members", stdout=out)
+        output = out.getvalue()
 
-        executor = MigrationExecutor(connection)
-        executor.migrate(self.migrate_to)
+        self.assertIn(f"pk={in_two_groups.pk} is_active=False groups=2", output)
+        self.assertIn(f"pk={active_managed.pk} is_active=True groups=1", output)
+        self.assertIn(f"pk={without_group.pk} is_active=False groups=0", output)
+        self.assertNotIn(f"pk={healthy.user_id} ", output)
+        self.assertNotIn(f"pk={repairable.pk} ", output)
 
-        repaired = ManagedMember.objects.get(user_id=managed.pk)
-        self.assertEqual(repaired.name, "Camille")
-        self.assertEqual(repaired.group_id, group.pk)
-        self.assertTrue(repaired.color)
-        self.assertEqual(ManagedMember.objects.get(pk=profile.pk).color, "#123456")
-        self.assertEqual(ManagedMember.objects.count(), 2)
-        self.assertFalse(ManagedMember.objects.filter(user_id__in=[regular.pk, orphan.pk]).exists())
-        self.assertEqual(Gift.objects.get(pk=gift.pk).owner_id, managed.pk)
+    def test_audit_managed_members_is_quiet_when_clean(self):
+        create_managed_member(self.group, self.owner, "Child")
+        out = StringIO()
+        call_command("audit_managed_members", stdout=out)
+        self.assertIn("No ambiguous managed identities", out.getvalue())
 
-        # Reapplying the repair must neither duplicate profiles nor remove wishes.
-        executor.migrate(self.migrate_from)
-        MigrationExecutor(connection).migrate(self.migrate_to)
-        self.assertEqual(ManagedMember.objects.count(), 2)
-        self.assertTrue(Gift.objects.filter(pk=gift.pk).exists())
+    def test_mutations_require_post_and_csrf(self):
+        url = reverse("add_managed_member", args=[self.group.pk])
+        self.assertEqual(self.client.get(url).status_code, 405)
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.owner)
+        self.assertEqual(client.post(url, {"name": "Child"}).status_code, 403)
 
-        response = self.client.post(reverse("edit_gift", args=[gift.pk]), {"title": "Illustrated book"})
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(Gift.objects.get(pk=gift.pk).title, "Illustrated book")
-        response = self.client.post(reverse("delete_gift", args=[gift.pk]))
-        self.assertEqual(response.status_code, 302)
-        self.assertFalse(Gift.objects.filter(pk=gift.pk).exists())
+    def test_leaving_a_group_that_still_has_a_real_member_keeps_it(self):
+        person = create_managed_member(self.group, self.owner, "Child")
+        self.client.force_login(self.owner)
+
+        response = self.client.post(reverse("leave_group", args=[self.group.pk]))
+
+        self.assertRedirects(response, reverse("dashboard"))
+        self.group.refresh_from_db()
+        self.assertFalse(self.group.members.filter(pk=self.owner.pk).exists())
+        self.assertTrue(self.group.members.filter(pk=self.member.pk).exists())
+        self.assertTrue(User.objects.filter(pk=person.user_id).exists())
+
+    def test_last_real_member_leaving_deletes_the_group_and_its_managed_people(self):
+        self.group.members.remove(self.member)
+        person = create_managed_member(self.group, self.owner, "Child")
+        Gift.objects.create(owner=person.user, created_by=self.owner, title="Bike")
+        self.client.force_login(self.owner)
+
+        response = self.client.post(reverse("leave_group", args=[self.group.pk]))
+
+        self.assertRedirects(response, reverse("dashboard"))
+        self.assertFalse(Group.objects.filter(pk=self.group.pk).exists())
+        self.assertFalse(User.objects.filter(pk=person.user_id).exists())
+        self.assertFalse(ManagedMember.objects.exists())
+        self.assertFalse(Gift.objects.exists())
+        self.assertTrue(User.objects.filter(pk=self.owner.pk).exists())

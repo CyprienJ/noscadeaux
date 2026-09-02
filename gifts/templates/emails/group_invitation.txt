@@ -1,0 +1,6 @@
+{% load i18n %}{% blocktrans with inviter=inviter_name name=group.name %}{{ inviter }} invites you to join the group "{{ name }}" on Nos Cadeaux.{% endblocktrans %}
+
+{% trans "Open the private invitation link:" %}
+{{ invitation_url }}
+
+{% trans "If you were not expecting this invitation, you can ignore this email." %}

@@ -47,6 +47,9 @@ services:
                  python manage.py send_notification_digests;
                  python manage.py send_event_reminders;
                  python manage.py purge_deleted_shared_lists;
+                 python manage.py cleanup_unverified_users;
+                 python manage.py cleanup_auth_throttle_events;
+                 python manage.py cleanup_group_invitation_dispatches;
                  sleep 3600;
                done"
       environment:

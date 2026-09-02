@@ -39,6 +39,7 @@ from .models import (
     Subscription,
     User,
 )
+from .onboarding import CURRENT_ONBOARDING_VERSION
 from .views import compute_group_balances
 
 
@@ -51,14 +52,33 @@ def make_image(name="test.jpg", width=200, height=200):
 
 
 def create_users():
+    profile_completed_at = timezone.now()
     user1 = User.objects.create_user(
-        username="user1@test.com", email="user1@test.com", password="password", is_verified=True, nickname="User1"
+        username="user1@test.com",
+        email="user1@test.com",
+        password="password",
+        is_verified=True,
+        nickname="User1",
+        onboarding_version=CURRENT_ONBOARDING_VERSION,
+        profile_completed_at=profile_completed_at,
     )
     user2 = User.objects.create_user(
-        username="user2@test.com", email="user2@test.com", password="password", is_verified=True, nickname="User2"
+        username="user2@test.com",
+        email="user2@test.com",
+        password="password",
+        is_verified=True,
+        nickname="User2",
+        onboarding_version=CURRENT_ONBOARDING_VERSION,
+        profile_completed_at=profile_completed_at,
     )
     user3 = User.objects.create_user(
-        username="user3@test.com", email="user3@test.com", password="password", is_verified=True, nickname="User3"
+        username="user3@test.com",
+        email="user3@test.com",
+        password="password",
+        is_verified=True,
+        nickname="User3",
+        onboarding_version=CURRENT_ONBOARDING_VERSION,
+        profile_completed_at=profile_completed_at,
     )
     return user1, user2, user3
 
@@ -75,6 +95,10 @@ class UserCleanupTest(TestCase):
         self.user2.save()
 
         self.user3.is_verified = False
+        # An abandoned registration that never finished onboarding.
+        self.user3.onboarding_version = 0
+        self.user3.onboarding_completed_at = None
+        self.user3.profile_completed_at = None
         self.user3.save()
 
         # Manually set date_joined to 31 minutes ago
@@ -88,17 +112,6 @@ class UserCleanupTest(TestCase):
         self.assertTrue(User.objects.filter(email="user1@test.com").exists())
         self.assertTrue(User.objects.filter(email="user2@test.com").exists())
         self.assertFalse(User.objects.filter(email="user3@test.com").exists())
-
-    def test_cleanup_in_view(self):
-        # Create an unverified user (old)
-        self.user1.is_verified = False
-        self.user1.date_joined = timezone.now() - timedelta(minutes=31)
-        self.user1.save()
-
-        # Using reverse to be sure about the URL
-        self.client.get(reverse("register"))
-
-        self.assertFalse(User.objects.filter(email="user1@test.com").exists())
 
 
 class AccessControlTest(TestCase):
@@ -179,7 +192,7 @@ class AccessControlTest(TestCase):
 
         # Redirect to dashboard as already verified
         self.assertRedirects(self.client.get(reverse("verify_email_sent")), reverse("dashboard"))
-        self.assertRedirects(self.client.get(reverse("resend_verification")), reverse("dashboard"))
+        self.assertEqual(self.client.get(reverse("resend_verification")).status_code, 405)
 
         # Authorized access
         self.assertEqual(self.client.get(reverse("dashboard")).status_code, 200)
@@ -549,6 +562,8 @@ class ReservationFlowTest(TestCase):
             password="password",
             is_verified=True,
             nickname="Outsider",
+            onboarding_version=CURRENT_ONBOARDING_VERSION,
+            profile_completed_at=timezone.now(),
         )
 
         self.client.force_login(self.user2)
@@ -603,6 +618,8 @@ class GiftCommentTest(TestCase):
             password="password",
             is_verified=True,
             nickname="Outsider",
+            onboarding_version=CURRENT_ONBOARDING_VERSION,
+            profile_completed_at=timezone.now(),
         )
         self.group = Group.objects.create(name="Family", created_by=self.member)
         self.group.members.add(self.owner, self.member, self.other_member)
@@ -2570,6 +2587,8 @@ class PublicDemoTest(TestCase):
             password="password",
             is_verified=True,
             nickname="Real",
+            onboarding_version=CURRENT_ONBOARDING_VERSION,
+            profile_completed_at=timezone.now(),
         )
 
         self.client.force_login(real_user)

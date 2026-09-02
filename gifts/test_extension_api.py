@@ -4,8 +4,10 @@ from urllib.parse import parse_qs, urlsplit
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import Gift, Group, User
+from .onboarding import CURRENT_ONBOARDING_VERSION
 
 
 def pkce_challenge(verifier):
@@ -24,6 +26,8 @@ class ExtensionApiTest(TestCase):
             email="quick@example.com",
             nickname="Quick",
             is_verified=True,
+            onboarding_version=CURRENT_ONBOARDING_VERSION,
+            profile_completed_at=timezone.now(),
         )
 
     def authorize(self, verifier=None):
@@ -148,6 +152,8 @@ class ExtensionApiTest(TestCase):
             email="other@example.com",
             nickname="Other",
             is_verified=True,
+            onboarding_version=CURRENT_ONBOARDING_VERSION,
+            profile_completed_at=timezone.now(),
         )
         group = Group.objects.create(name="Other group", created_by=other)
         group.members.add(other)

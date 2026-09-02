@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Choose a group" %} – Nos cadeaux{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-xl-9">
+            <div class="text-center mb-4">
+                <div class="text-uppercase small fw-semibold text-muted mb-2" style="letter-spacing:.08em">
+                    {% trans "Step 3 of 3" %}
+                </div>
+                <h1 class="h2 fw-bold mb-2">{% trans "Start with a group" %}</h1>
+                <p class="text-muted mb-0">
+                    {% trans "Create a space for your loved ones, or join one with its code." %}
+                </p>
+            </div>
+
+            <div class="row g-4 align-items-stretch">
+                <div class="col-md-6">
+                    <section class="card border-0 shadow-sm rounded-5 h-100 p-3">
+                        <div class="card-body d-flex flex-column">
+                            <div class="fs-2 text-primary mb-3"><i class="bi bi-people-fill" aria-hidden="true"></i></div>
+                            <h2 class="h4 fw-bold">{% trans "Create a group" %}</h2>
+                            <p class="text-muted">{% trans "Bring together the people with whom you exchange gifts." %}</p>
+                            <form method="post" action="{% url 'create_group' %}" class="mt-auto">
+                                {% csrf_token %}
+                                <label for="{{ group_form.name.id_for_label }}" class="form-label fw-semibold">
+                                    {% trans "Group name" %}
+                                </label>
+                                {{ group_form.name }}
+                                <button type="submit" class="btn btn-primary w-100 rounded-pill mt-3">
+                                    {% trans "Create my group" %}
+                                </button>
+                            </form>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="col-md-6">
+                    <section class="card border-0 shadow-sm rounded-5 h-100 p-3">
+                        <div class="card-body d-flex flex-column">
+                            <div class="fs-2 text-primary mb-3"><i class="bi bi-key-fill" aria-hidden="true"></i></div>
+                            <h2 class="h4 fw-bold">{% trans "Join with a code" %}</h2>
+                            <p class="text-muted">{% trans "Ask a member of the group for its short code." %}</p>
+                            <form method="post" action="{% url 'onboarding_join_group' %}" class="mt-auto">
+                                {% csrf_token %}
+                                <label for="{{ join_form.code.id_for_label }}" class="form-label fw-semibold">
+                                    {{ join_form.code.label }}
+                                </label>
+                                {{ join_form.code }}
+                                <button type="submit" class="btn btn-outline-primary w-100 rounded-pill mt-3">
+                                    {% trans "View the group" %}
+                                </button>
+                            </form>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <form method="post" action="{% url 'onboarding_group_skip' %}" class="text-center mt-4">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-link text-muted">
+                    {% trans "I'll do this later" %}
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

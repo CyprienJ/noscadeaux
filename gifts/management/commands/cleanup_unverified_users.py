@@ -12,7 +12,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         expiry_time = timezone.now() - timedelta(minutes=30)
         unverified_users = User.objects.filter(
-            is_verified=False, date_joined__lt=expiry_time, is_staff=False, is_superuser=False
+            is_verified=False,
+            date_joined__lt=expiry_time,
+            is_staff=False,
+            is_superuser=False,
+            onboarding_completed_at__isnull=True,
+            onboarding_version=0,
         )
         count = unverified_users.count()
         unverified_users.delete()

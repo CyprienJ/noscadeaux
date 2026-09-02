@@ -17,10 +17,14 @@ urlpatterns = [
     path("dashboard/", views.dashboard, name="dashboard"),
     # Auth
     path("demo/", account.demo_login, name="demo_login"),
-    path("login/", auth_views.LoginView.as_view(), name="login"),
+    path("login/", account.OnboardingLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(next_page="welcome"), name="logout"),
     # Settings
     path("register/", account.register, name="register"),
+    path("onboarding/profile/", account.onboarding_profile, name="onboarding_profile"),
+    path("onboarding/group/", groups.onboarding_group, name="onboarding_group"),
+    path("onboarding/group/join/", groups.onboarding_join_group, name="onboarding_join_group"),
+    path("onboarding/group/skip/", groups.onboarding_group_skip, name="onboarding_group_skip"),
     path(
         "account/change_password/",
         account.DemoProtectedPasswordChangeView.as_view(
@@ -67,7 +71,22 @@ urlpatterns = [
     path("group/join/", groups.join_group, name="join_group"),
     path("group/join/<str:token>/", groups.join_group, name="join_group"),
     path("group/join/<str:token>/confirm/", groups.join_group_confirm, name="join_group_confirm"),
+    path("group/join/<str:token>/dismiss/", groups.dismiss_group_invite, name="dismiss_group_invite"),
+    path("group/invite/<str:token>/", groups.group_invitation, name="group_invitation"),
+    path("group/invite/<str:token>/accept/", groups.accept_group_invitation, name="group_invitation_accept"),
+    path("group/invite/<str:token>/dismiss/", groups.dismiss_secure_group_invitation, name="group_invitation_dismiss"),
     path("group/<int:group_id>/", groups.group_detail, name="group_detail"),
+    path("group/<int:group_id>/invitations/", groups.group_invitations, name="group_invitations"),
+    path(
+        "group/<int:group_id>/invitations/email/",
+        groups.send_group_invitation_emails,
+        name="send_group_invitation_emails",
+    ),
+    path(
+        "group/<int:group_id>/invitations/regenerate/",
+        groups.regenerate_group_invitation_token,
+        name="regenerate_group_invitation_token",
+    ),
     path("group/<int:group_id>/edit/", groups.edit_group, name="edit_group"),
     path("group/<int:group_id>/photo/", groups.group_photo_upload, name="photo_upload_group"),
     path("group/<int:group_id>/regenerate-token/", groups.regenerate_group_token, name="regenerate_group_token"),

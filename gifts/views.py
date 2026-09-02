@@ -46,6 +46,7 @@ from .models import (
     Subscription,
     User,
 )
+from .onboarding import get_onboarding_next_url
 
 OFFER_MODAL_CONTENT_PATH = "gifts/includes/_offer_modal_content.html"
 RESERVE_MODAL_MODEL_PATH = "gifts/includes/_reserve_modal_content.html"
@@ -423,10 +424,7 @@ def redirect_dashboard():
 
 def welcome(request):
     if request.user.is_authenticated:
-        if request.user.is_verified:
-            return redirect_dashboard()
-        else:
-            return redirect("verify_email_sent")
+        return redirect(get_onboarding_next_url(request.user, request))
     return render(request, "gifts/welcome.html")
 
 

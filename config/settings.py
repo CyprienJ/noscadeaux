@@ -85,7 +85,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "gifts.middleware.EmailVerificationMiddleware",
+    "gifts.middleware.AccountSetupMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -211,6 +211,22 @@ ANYMAIL = {
 }
 
 DEFAULT_FROM_EMAIL = "Nos Cadeaux <noreply@noscadeaux.fr>"
+VERIFICATION_EMAIL_RESEND_COOLDOWN_SECONDS = 60
+GROUP_INVITATION_MAX_RECIPIENTS_PER_REQUEST = int(os.environ.get("GROUP_INVITATION_MAX_RECIPIENTS_PER_REQUEST", "10"))
+GROUP_INVITATION_MAX_RECIPIENTS_PER_USER_WINDOW = int(
+    os.environ.get("GROUP_INVITATION_MAX_RECIPIENTS_PER_USER_WINDOW", "30")
+)
+GROUP_INVITATION_MAX_RECIPIENTS_PER_GROUP_WINDOW = int(
+    os.environ.get("GROUP_INVITATION_MAX_RECIPIENTS_PER_GROUP_WINDOW", "100")
+)
+GROUP_INVITATION_RATE_WINDOW_SECONDS = int(os.environ.get("GROUP_INVITATION_RATE_WINDOW_SECONDS", "3600"))
+
+# Per-IP throttle for account creation and verification resends (sliding window).
+AUTH_RATE_WINDOW_SECONDS = int(os.environ.get("AUTH_RATE_WINDOW_SECONDS", "900"))
+REGISTRATION_MAX_ATTEMPTS_PER_IP_WINDOW = int(os.environ.get("REGISTRATION_MAX_ATTEMPTS_PER_IP_WINDOW", "10"))
+VERIFICATION_RESEND_MAX_ATTEMPTS_PER_IP_WINDOW = int(
+    os.environ.get("VERIFICATION_RESEND_MAX_ATTEMPTS_PER_IP_WINDOW", "10")
+)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 

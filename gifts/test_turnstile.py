@@ -18,7 +18,6 @@ TURNSTILE_SETTINGS = {
 @override_settings(**TURNSTILE_SETTINGS)
 class TurnstileRegistrationTest(TestCase):
     registration_data = {
-        "nickname": "Alice",
         "email": "alice@example.com",
         "password1": "a-secure-test-password-2026",
         "password2": "a-secure-test-password-2026",
@@ -49,7 +48,7 @@ class TurnstileRegistrationTest(TestCase):
         data = {**self.registration_data, "cf-turnstile-response": "valid-token"}
         response = self.client.post(reverse("register"), data, REMOTE_ADDR="203.0.113.10")
 
-        self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
+        self.assertRedirects(response, reverse("verify_email_sent"), fetch_redirect_response=False)
         user = User.objects.get(email="alice@example.com")
         send_verification_email.assert_called_once()
         self.assertEqual(send_verification_email.call_args.args[1], user)
