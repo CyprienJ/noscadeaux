@@ -3,6 +3,7 @@ import uuid
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -11,7 +12,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from gifts.demo import demo_scope_forbidden_response, has_same_demo_scope
 from gifts.forms import GroupForm
-from gifts.models import EventList, Group, ManagedMember, SharedGiftPublication, User
+from gifts.models import MANAGED_MEMBER_COLORS, EventList, Group, ManagedMember, SharedGiftPublication, User
 from gifts.photo_presets import is_valid_photo_preset, list_photo_presets
 
 NOT_A_MEMBER = "You are not a member of this group."
@@ -120,16 +121,23 @@ def add_managed_member(request, group_id):
         return redirect("group_detail", group_id=group_id)
 
     email = f"managed_{uuid.uuid4().hex[:12]}@noscadeaux.internal"
-    managed_user = User.objects.create(
-        email=email,
-        username=email,
-        nickname=name,
-        is_managed=True,
-        is_demo=request.user.is_demo,
-        is_verified=True,
-        is_active=False,
-    )
-    group.members.add(managed_user)
+    with transaction.atomic():
+        managed_user = User.objects.create(
+            email=email,
+            username=email,
+            nickname=name,
+            is_managed=True,
+            is_demo=request.user.is_demo,
+            is_verified=True,
+            is_active=False,
+        )
+        ManagedMember.objects.create(
+            user=managed_user,
+            group=group,
+            name=name,
+            color=MANAGED_MEMBER_COLORS[group.managed_members.count() % len(MANAGED_MEMBER_COLORS)],
+        )
+        group.members.add(managed_user)
     return redirect(f"{reverse('view_list', args=[managed_user.id])}?from_group={group_id}")
 
 
