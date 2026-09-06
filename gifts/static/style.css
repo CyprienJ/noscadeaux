@@ -1375,12 +1375,8 @@ body {
     align-items: center;
     justify-content: center;
     color: var(--nc-text-sub);
-    display: none;
-    transition: background 0.12s;
-}
-.nc-member-item-wrapper:hover .nc-member-manage-btn,
-.nc-member-item--active ~ .nc-member-manage-btn {
     display: flex;
+    transition: background 0.12s;
 }
 .nc-member-manage-btn:hover { background: var(--nc-accent-mid); }
 

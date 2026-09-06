@@ -88,8 +88,9 @@
                         <span class="nc-member-managed-pill">{% trans "managed" %}</span>
                     </a>
                     {% if mm %}
-                    <button class="nc-member-manage-btn"
+                    <button type="button" class="nc-member-manage-btn"
                             onclick="openManageManagedModal('{{ mm.id }}', '{{ member.nickname|escapejs }}', '{% url 'rename_managed_member' group.id mm.id %}', '{% url 'delete_managed_member' group.id mm.id %}')"
+                            aria-label="{% trans 'Manage' %} {{ member.nickname }}"
                             title="{% trans 'Manage' %} {{ member.nickname }}">
                         <i class="bi bi-three-dots-vertical" style="font-size:10px"></i>
                     </button>
