@@ -56,6 +56,7 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         "email",
         "nickname",
         "birthday",
+        "date_joined",
         "is_staff",
         "is_active",
         "is_verified",

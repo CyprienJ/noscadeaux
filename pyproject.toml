@@ -1,6 +1,6 @@
 [project]
 name = "nosCadeaux"
-version = "1.3.8"
+version = "1.3.9"
 description = "A website to manage a gift list"
 license = "AGPL-3.0-or-later"
 requires-python = ">=3.12"
