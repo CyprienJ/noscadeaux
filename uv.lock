@@ -184,7 +184,7 @@ wheels = [
 
 [[package]]
 name = "noscadeaux"
-version = "1.4.0"
+version = "1.4.1"
 source = { virtual = "." }
 dependencies = [
     { name = "beautifulsoup4" },
