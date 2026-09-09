@@ -1,5 +1,7 @@
 # nosCadeaux Firefox Quick Add
 
+[Project documentation](../README.md) · [Architecture and API protocol](../docs/architecture/extension.md)
+
 This release targets Firefox Desktop 140 and later. Firefox for Android is not supported because the extension uses
 the desktop sidebar API.
 
