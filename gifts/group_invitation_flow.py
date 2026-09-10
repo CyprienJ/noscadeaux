@@ -9,10 +9,12 @@ private link share exactly one implementation.
 from enum import Enum
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext as _
 
 from gifts.demo import demo_scope_forbidden_response, has_same_demo_scope
+from gifts.managed_members import ManagedIdentityUnavailableError, claim_managed_identity
 from gifts.models import Group
 from gifts.onboarding import (
     clear_pending_group_invite,
@@ -105,6 +107,10 @@ def group_invitation_preview(request, group, pending_value, accept_url, dismiss_
             "onboarding_incomplete": request.user.is_authenticated and not onboarding_is_complete(request.user),
             "accept_url": accept_url,
             "dismiss_url": dismiss_url,
+            # Only a visitor who can actually join is offered "I am <managed member>".
+            "claimable_managed_members": (
+                list(group.managed_members.order_by("created_at", "pk")) if state is InvitePreviewState.CAN_JOIN else []
+            ),
         },
     )
 
@@ -113,11 +119,20 @@ def join_previewed_group(request, group, pending_value):
     """POST target behind the preview's "join" button, for a logged-in user."""
     if not has_same_demo_scope(request.user, group):
         return demo_scope_forbidden_response()
+
+    claim_id = (request.POST.get("claim_managed_member") or "").strip()
+    if claim_id.isdigit():
+        return _join_as_managed_member(request, group, pending_value, int(claim_id))
+
     if request.user in group.members.all():
         messages.info(request, _("You are already a member of the group '%s'.") % group.name)
     else:
         group.members.add(request.user)
         messages.success(request, _("You have joined the group '%s'!") % group.name)
+    return _complete_join(request, group, pending_value)
+
+
+def _complete_join(request, group, pending_value):
     if not onboarding_is_complete(request.user):
         complete_onboarding(request.user)
         record_onboarding_event("group_joined", request.user)
@@ -126,6 +141,33 @@ def join_previewed_group(request, group, pending_value):
     if get_pending_group_invite(request.user, request) == pending_value:
         clear_pending_group_invite(request)
     return redirect("group_detail", group_id=group.id)
+
+
+def _join_as_managed_member(request, group, pending_value, claim_id):
+    """The visitor picked "I am <managed member>" on the preview page."""
+    member = group.managed_members.filter(pk=claim_id).first()
+    if member is not None:
+        try:
+            claim_managed_identity(request.user, member)
+        except PermissionDenied:
+            return demo_scope_forbidden_response()
+        except ManagedIdentityUnavailableError:
+            member = None
+        else:
+            messages.success(
+                request,
+                _("You joined the group '%(group)s' as %(person)s — their wishes are now yours.")
+                % {"group": group.name, "person": member.name},
+            )
+            return _complete_join(request, group, pending_value)
+
+    # The member vanished, a claimer won the race, or the id was tampered with.
+    group.members.add(request.user)
+    messages.info(
+        request,
+        _("That choice is no longer available, so you simply joined the group '%s'.") % group.name,
+    )
+    return _complete_join(request, group, pending_value)
 
 
 def dismiss_group_invitation(request, pending_value):

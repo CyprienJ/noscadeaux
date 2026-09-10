@@ -2347,6 +2347,22 @@ body {
 }
 .nc-invitation-decline-btn:hover { background: var(--nc-bg-sub); }
 
+.nc-invitation-claim {
+    border: none; padding: 0; margin: 0 0 16px; text-align: left;
+}
+.nc-invitation-claim legend {
+    float: none; width: auto; padding: 0; margin-bottom: 10px;
+    font-size: 12px; font-weight: 600; color: var(--nc-text-muted);
+    letter-spacing: 0.08em; text-transform: uppercase;
+}
+.nc-invitation-claim label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; padding: 6px 0; cursor: pointer;
+}
+.nc-invitation-claim p {
+    font-size: 11px; color: var(--nc-text-muted); margin: 6px 0 0;
+}
+
 .nc-invitation-members { max-width: 520px; width: 100%; animation: nc-fade-in 0.5s ease 0.15s both; }
 .nc-invitation-members-title {
     font-size: 10px; font-weight: 600; color: var(--nc-text-muted);

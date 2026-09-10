@@ -7,8 +7,13 @@ from django.db import IntegrityError
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from gifts.managed_members import MANAGED_MEMBER_COLORS, create_managed_member
-from gifts.models import Gift, Group, ManagedMember, User
+from gifts.managed_members import (
+    MANAGED_MEMBER_COLORS,
+    ManagedIdentityUnavailableError,
+    claim_managed_identity,
+    create_managed_member,
+)
+from gifts.models import Gift, Group, ManagedMember, Reservation, User
 from gifts.tests import create_users
 
 
@@ -223,3 +228,124 @@ class ManagedPeopleTest(TestCase):
         self.assertFalse(ManagedMember.objects.exists())
         self.assertFalse(Gift.objects.exists())
         self.assertTrue(User.objects.filter(pk=self.owner.pk).exists())
+
+
+class ClaimManagedIdentityTest(TestCase):
+    def setUp(self):
+        self.owner, self.member, self.alpha = create_users()
+        self.group = Group.objects.create(name="Family", created_by=self.owner)
+        self.group.members.add(self.owner, self.member)
+        self.person = create_managed_member(self.group, self.owner, "Léa")
+
+    def test_claim_adds_claimer_and_removes_managed_person(self):
+        claim_managed_identity(self.alpha, self.person)
+
+        self.assertTrue(self.group.members.filter(pk=self.alpha.pk).exists())
+        self.assertFalse(ManagedMember.objects.filter(pk=self.person.pk).exists())
+        self.assertFalse(User.objects.filter(pk=self.person.user_id).exists())
+        self.assertTrue(Group.objects.filter(pk=self.group.pk).exists())
+        self.assertTrue(User.objects.filter(pk=self.member.pk).exists())
+
+    def test_self_created_managed_gifts_become_claimer_wishes(self):
+        gift = Gift.objects.create(owner=self.person.user, created_by=self.person.user, title="Bike")
+
+        claim_managed_identity(self.alpha, self.person)
+
+        gift.refresh_from_db()
+        self.assertEqual(gift.owner, self.alpha)
+        self.assertEqual(gift.created_by, self.alpha)
+        self.assertEqual(list(gift.visible_in.all()), [self.group])
+
+    def test_gifts_created_by_others_become_claimer_surprises(self):
+        gift = Gift.objects.create(owner=self.person.user, created_by=self.member, title="Watch")
+
+        claim_managed_identity(self.alpha, self.person)
+
+        gift.refresh_from_db()
+        self.assertEqual(gift.owner, self.alpha)
+        self.assertEqual(gift.created_by, self.member)
+        self.assertNotEqual(gift.created_by_id, gift.owner_id)
+        self.assertEqual(list(gift.visible_in.all()), [self.group])
+
+    def test_transferred_gifts_are_scoped_to_the_group_only(self):
+        second = Group.objects.create(name="Friends", created_by=self.owner)
+        second.members.add(self.owner, self.alpha)
+        gift = Gift.objects.create(owner=self.person.user, created_by=self.member, title="Watch")
+
+        claim_managed_identity(self.alpha, self.person)
+
+        gift.refresh_from_db()
+        self.assertEqual(list(gift.visible_in.all()), [self.group])
+
+    def test_existing_reservation_by_other_member_survives_claim(self):
+        gift = Gift.objects.create(owner=self.person.user, created_by=self.member, title="Watch")
+        reservation = Reservation.objects.create(gift=gift, reserver=self.member)
+
+        claim_managed_identity(self.alpha, self.person)
+
+        gift.refresh_from_db()
+        self.assertEqual(gift.owner, self.alpha)
+        self.assertTrue(Reservation.objects.filter(pk=reservation.pk).exists())
+
+    def test_claiming_person_with_no_gifts_just_joins(self):
+        claim_managed_identity(self.alpha, self.person)
+
+        self.assertTrue(self.group.members.filter(pk=self.alpha.pk).exists())
+        self.assertFalse(ManagedMember.objects.exists())
+
+    def test_legacy_member_without_user_is_unavailable(self):
+        ghost = ManagedMember.objects.create(name="Ghost", group=self.group, color="#000", user=None)
+
+        with self.assertRaises(ManagedIdentityUnavailableError):
+            claim_managed_identity(self.alpha, ghost)
+
+        self.assertTrue(ManagedMember.objects.filter(pk=ghost.pk).exists())
+        self.assertFalse(self.group.members.filter(pk=self.alpha.pk).exists())
+
+    def test_second_claim_raises_unavailable(self):
+        claim_managed_identity(self.alpha, self.person)
+
+        with self.assertRaises(ManagedIdentityUnavailableError):
+            claim_managed_identity(self.member, self.person)
+
+    def test_demo_scope_mismatch_raises_permission_denied(self):
+        self.alpha.is_demo = True
+        self.alpha.save(update_fields=["is_demo"])
+
+        with self.assertRaises(PermissionDenied):
+            claim_managed_identity(self.alpha, self.person)
+
+        self.assertTrue(ManagedMember.objects.filter(pk=self.person.pk).exists())
+        self.assertFalse(self.group.members.filter(pk=self.alpha.pk).exists())
+
+    def test_legacy_managed_member_fk_on_gift_is_cleared(self):
+        gift = Gift.objects.create(
+            owner=self.person.user, created_by=self.member, managed_member=self.person, title="Kite"
+        )
+
+        claim_managed_identity(self.alpha, self.person)
+
+        gift.refresh_from_db()
+        self.assertIsNone(gift.managed_member_id)
+        self.assertEqual(gift.owner, self.alpha)
+
+    def test_claim_rolls_back_on_failure(self):
+        gift = Gift.objects.create(owner=self.person.user, created_by=self.member, title="Watch")
+
+        with (
+            patch.object(ManagedMember, "delete", side_effect=IntegrityError),
+            self.assertRaises(IntegrityError),
+        ):
+            claim_managed_identity(self.alpha, self.person)
+
+        gift.refresh_from_db()
+        self.assertEqual(gift.owner_id, self.person.user_id)
+        self.assertFalse(self.group.members.filter(pk=self.alpha.pk).exists())
+        self.assertTrue(ManagedMember.objects.filter(pk=self.person.pk).exists())
+        self.assertTrue(User.objects.filter(pk=self.person.user_id).exists())
+
+    def test_technical_user_membership_row_is_removed(self):
+        claim_managed_identity(self.alpha, self.person)
+
+        self.assertFalse(self.group.members.filter(pk=self.person.user_id).exists())
+        self.assertTrue(self.group.members.filter(pk=self.alpha.pk).exists())
