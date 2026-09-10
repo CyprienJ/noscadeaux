@@ -43,13 +43,45 @@
 
             {# CTA buttons #}
             {% if request.user.is_authenticated %}
-                <form method="post" action="{{ accept_url }}">
+                <form method="post" action="{{ accept_url }}" id="nc-invite-accept-form">
                     {% csrf_token %}
+                    {% if claimable_managed_members and not already_member %}
+                        <fieldset class="nc-invitation-claim">
+                            <legend>{% trans "How do you want to join?" %}</legend>
+                            <label>
+                                <input type="radio" name="claim_managed_member" value="" checked>
+                                <span>{% trans "Just join the group" %}</span>
+                            </label>
+                            {% for person in claimable_managed_members %}
+                                <label>
+                                    <input type="radio" name="claim_managed_member"
+                                           value="{{ person.id }}" data-name="{{ person.name }}">
+                                    <span>{% blocktrans with name=person.name %}I am {{ name }}{% endblocktrans %}</span>
+                                </label>
+                            {% endfor %}
+                            <p>{% trans "If you pick a name, that person's wishes become yours in this group." %}</p>
+                        </fieldset>
+                    {% endif %}
                     <button type="submit" class="nc-invitation-accept-btn w-100 border-0">
                         <i class="bi bi-person-plus-fill" style="font-size:16px"></i>
                         {% if already_member %}{% trans "Continue to the group" %}{% else %}{% trans "Accept invitation" %}{% endif %}
                     </button>
                 </form>
+                {% if claimable_managed_members and not already_member %}
+                    {% trans "You are about to take over NAME's wishes in this group and remove that managed entry. Continue?" as claim_confirm %}
+                    <script>
+                        (function () {
+                            var form = document.getElementById("nc-invite-accept-form");
+                            if (!form) { return; }
+                            form.addEventListener("submit", function (event) {
+                                var picked = form.querySelector('input[name="claim_managed_member"]:checked');
+                                if (!picked || !picked.value) { return; }
+                                var message = "{{ claim_confirm|escapejs }}".replace("NAME", picked.dataset.name);
+                                if (!window.confirm(message)) { event.preventDefault(); }
+                            });
+                        })();
+                    </script>
+                {% endif %}
             {% else %}
                 <a href="{% url 'login' %}?next={{ request.get_full_path|urlencode }}"
                    class="nc-invitation-accept-btn">

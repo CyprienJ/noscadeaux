@@ -27,6 +27,13 @@ def can_manage_group_people(user, group):
     )
 
 
+def can_claim_managed_identity(user, group):
+    """May ``user`` join ``group`` by taking over one of its managed members?
+    Same policy as ``can_manage_group_people`` minus the membership requirement,
+    since the claimer is joining, not already inside."""
+    return bool(user.is_authenticated and user.is_active and not user.is_managed and user.is_demo == group.is_demo)
+
+
 def group_invitation_forbidden_response():
     return HttpResponseForbidden(_("You do not have permission to manage invitations for this group."))
 

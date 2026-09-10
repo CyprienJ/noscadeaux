@@ -12,11 +12,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .group_invitations import send_group_invitations
-from .models import Group, GroupInvitationDispatch, User
+from .managed_members import claim_managed_identity, create_managed_member
+from .models import Gift, Group, GroupInvitationDispatch, ManagedMember, User
 from .onboarding import (
     CURRENT_ONBOARDING_VERSION,
     PENDING_GROUP_INVITE_SESSION_KEY,
     group_invitation_pending_value,
+    onboarding_is_complete,
 )
 
 
@@ -363,3 +365,181 @@ class GroupInvitationTest(TestCase):
             user.pending_group_invite_token,
             group_invitation_pending_value(self.group.invitation_token),
         )
+
+
+class ClaimIdentityFromPreviewTest(TestCase):
+    def setUp(self):
+        completed_at = timezone.now()
+
+        def make(email, nickname):
+            return User.objects.create_user(
+                email=email,
+                username=email,
+                password="password",
+                nickname=nickname,
+                is_verified=True,
+                profile_completed_at=completed_at,
+                onboarding_version=CURRENT_ONBOARDING_VERSION,
+                onboarding_completed_at=completed_at,
+            )
+
+        self.owner = make("claim-owner@example.com", "Owner")
+        self.member = make("claim-member@example.com", "Member")
+        self.outsider = make("claim-outsider@example.com", "Outsider")
+        self.group = Group.objects.create(name="Family", created_by=self.owner)
+        self.group.members.add(self.owner, self.member)
+        self.person = create_managed_member(self.group, self.owner, "Léa")
+
+    def link_url(self, token=None):
+        return reverse("group_invitation", kwargs={"token": token or self.group.invitation_token})
+
+    def accept_url(self, token=None):
+        return reverse("group_invitation_accept", kwargs={"token": token or self.group.invitation_token})
+
+    def group_detail_url(self):
+        return reverse("group_detail", args=[self.group.id])
+
+    @staticmethod
+    def _messages(response):
+        return [str(m) for m in response.context["messages"]]
+
+    def test_preview_lists_claim_options_for_a_joinable_visitor(self):
+        self.client.force_login(self.outsider)
+
+        response = self.client.get(self.link_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["claimable_managed_members"]), [self.person])
+        self.assertContains(response, "Léa")
+        self.assertContains(response, 'name="claim_managed_member"')
+        self.assertContains(response, f'value="{self.person.id}"')
+
+    def test_preview_hides_claim_options_from_existing_member(self):
+        self.client.force_login(self.member)
+
+        response = self.client.get(self.link_url(), follow=True)
+
+        self.assertNotContains(response, 'name="claim_managed_member"')
+
+    def test_preview_hides_claim_options_from_anonymous(self):
+        response = self.client.get(self.link_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["claimable_managed_members"]), [])
+        self.assertNotContains(response, 'name="claim_managed_member"')
+
+    def test_post_claim_joins_as_person_and_transfers_gifts(self):
+        gift = Gift.objects.create(owner=self.person.user, created_by=self.member, title="Watch")
+        self.client.force_login(self.outsider)
+
+        response = self.client.post(self.accept_url(), {"claim_managed_member": self.person.id}, follow=True)
+
+        self.assertEqual(response.redirect_chain[-1][0], self.group_detail_url())
+        self.assertTrue(self.group.members.filter(pk=self.outsider.pk).exists())
+        self.assertFalse(ManagedMember.objects.filter(pk=self.person.pk).exists())
+        gift.refresh_from_db()
+        self.assertEqual(gift.owner, self.outsider)
+        self.assertTrue(any("Léa" in message for message in self._messages(response)))
+
+    def test_post_without_claim_is_a_plain_join(self):
+        self.client.force_login(self.outsider)
+
+        response = self.client.post(self.accept_url(), {"claim_managed_member": ""})
+
+        self.assertRedirects(response, self.group_detail_url())
+        self.assertTrue(self.group.members.filter(pk=self.outsider.pk).exists())
+        self.assertTrue(ManagedMember.objects.filter(pk=self.person.pk).exists())
+        self.assertTrue(User.objects.filter(pk=self.person.user_id).exists())
+
+    def test_losing_the_race_falls_back_to_plain_join(self):
+        claim_managed_identity(self.member, self.person)
+        self.client.force_login(self.outsider)
+
+        response = self.client.post(self.accept_url(), {"claim_managed_member": self.person.id}, follow=True)
+
+        self.assertEqual(response.redirect_chain[-1][0], self.group_detail_url())
+        self.assertTrue(self.group.members.filter(pk=self.outsider.pk).exists())
+        self.assertTrue(any("plus disponible" in message for message in self._messages(response)))
+
+    def test_claim_completes_onboarding(self):
+        completed_at = timezone.now()
+        newbie = User.objects.create_user(
+            email="claim-newbie@example.com",
+            username="claim-newbie@example.com",
+            password="password",
+            nickname="Newbie",
+            is_verified=True,
+            profile_completed_at=completed_at,
+        )
+        self.client.force_login(newbie)
+        self.client.get(reverse("join_group", kwargs={"token": self.group.group_token}))
+
+        response = self.client.post(
+            reverse("join_group_confirm", kwargs={"token": self.group.group_token}),
+            {"claim_managed_member": self.person.id},
+        )
+
+        self.assertRedirects(response, self.group_detail_url())
+        newbie.refresh_from_db()
+        self.assertTrue(onboarding_is_complete(newbie))
+        self.assertEqual(newbie.pending_group_invite_token, "")
+
+    def test_claim_works_via_short_code_route(self):
+        gift = Gift.objects.create(owner=self.person.user, created_by=self.member, title="Watch")
+        self.client.force_login(self.outsider)
+
+        response = self.client.post(
+            reverse("join_group_confirm", kwargs={"token": self.group.group_token}),
+            {"claim_managed_member": self.person.id},
+        )
+
+        self.assertRedirects(response, self.group_detail_url())
+        gift.refresh_from_db()
+        self.assertEqual(gift.owner, self.outsider)
+
+    def test_claim_rejected_on_demo_scope_mismatch(self):
+        self.outsider.is_demo = True
+        self.outsider.save(update_fields=["is_demo"])
+        self.client.force_login(self.outsider)
+
+        response = self.client.post(self.accept_url(), {"claim_managed_member": self.person.id})
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_non_numeric_claim_value_is_ignored(self):
+        self.client.force_login(self.outsider)
+
+        response = self.client.post(self.accept_url(), {"claim_managed_member": "abc"})
+
+        self.assertRedirects(response, self.group_detail_url())
+        self.assertTrue(self.group.members.filter(pk=self.outsider.pk).exists())
+        self.assertTrue(ManagedMember.objects.filter(pk=self.person.pk).exists())
+
+    def test_claim_id_from_another_group_is_ignored(self):
+        other = Group.objects.create(name="Other", created_by=self.owner)
+        other.members.add(self.owner)
+        other_person = create_managed_member(other, self.owner, "Zoe")
+        self.client.force_login(self.outsider)
+
+        response = self.client.post(self.accept_url(), {"claim_managed_member": other_person.id}, follow=True)
+
+        self.assertEqual(response.redirect_chain[-1][0], self.group_detail_url())
+        self.assertTrue(self.group.members.filter(pk=self.outsider.pk).exists())
+        self.assertTrue(ManagedMember.objects.filter(pk=other_person.pk).exists())
+
+    def test_double_post_of_a_successful_claim_is_idempotent(self):
+        self.client.force_login(self.outsider)
+        self.client.post(self.accept_url(), {"claim_managed_member": self.person.id})
+
+        response = self.client.post(self.accept_url(), {"claim_managed_member": self.person.id})
+
+        self.assertRedirects(response, self.group_detail_url())
+        self.assertEqual(self.group.members.filter(pk=self.outsider.pk).count(), 1)
+
+    def test_claim_option_label_is_translated_in_french(self):
+        self.client.force_login(self.outsider)
+
+        response = self.client.get(self.link_url())
+
+        self.assertContains(response, "Je suis Léa")
+        self.assertContains(response, "Rejoindre simplement le groupe")
