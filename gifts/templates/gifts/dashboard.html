@@ -14,8 +14,10 @@
                 {% trans "Hello" %}, <em>{{ request.user.nickname|capfirst }}</em> !
             </h1>
             <p class="nc-subtitle">
-                {% if user_groups %}
-                    {% blocktrans count count=user_groups.count %}You are part of {{ count }} group{% plural %}You are part of {{ count }} groups{% endblocktrans %}
+                {% if user_shared_lists or user_groups %}
+                    {% if user_shared_lists %}{% blocktrans count count=user_shared_lists.count %}{{ count }} shared list{% plural %}{{ count }} shared lists{% endblocktrans %}{% endif %}
+                    {% if user_shared_lists and user_groups %}·{% endif %}
+                    {% if user_groups %}{% blocktrans count count=user_groups.count %}{{ count }} group{% plural %}{{ count }} groups{% endblocktrans %}{% endif %}
                 {% else %}
                     {% trans "Join your first group to start sharing." %}
                 {% endif %}
@@ -35,177 +37,52 @@
         </div>
     </header>
 
-    <!-- My list banner -->
-    <a href="{% url 'view_list' request.user.id %}" class="nc-list-banner" style="text-decoration:none">
-        <div class="nc-list-banner__icon">🎁</div>
-        <div class="nc-list-banner__body">
-            <div class="nc-list-banner__title">{% trans "My gift list" %}</div>
-            <div class="nc-list-banner__sub">
-                {% blocktrans count count=open_wish_count %}{{ count }} idea{% plural %}{{ count }} ideas{% endblocktrans %}
-                {% if user_groups %}
-                    · {% blocktrans count count=user_groups.count %}{{ count }} group{% plural %}{{ count }} groups{% endblocktrans %}
-                {% endif %}
-            </div>
-        </div>
-        <span class="nc-btn nc-btn--white nc-btn--sm">
-            <i class="bi bi-pencil" style="font-size:11px"></i>
-            {% trans "Edit" %}
-        </span>
-    </a>
-
-    <div class="nc-dashboard-shell">
-        <aside class="nc-dashboard-groups-sidebar">
-    <!-- Shared lists -->
-    <div class="d-flex align-items-center justify-content-between mb-2">
-        <div class="nc-section-label mb-0">
-            {% trans "Shared lists" %}{% if user_shared_lists %} · {{ user_shared_lists.count }}{% endif %}
-        </div>
-        <button type="button" class="nc-btn nc-btn--ghost nc-btn--sm"
-                data-bs-toggle="modal" data-bs-target="#createSharedListModal"
-                title="{% trans 'New shared list' %}" aria-label="{% trans 'New shared list' %}">
-            <i class="bi bi-plus-lg"></i>
-        </button>
-    </div>
-    {% if user_shared_lists %}
-        <div class="nc-groups-grid">
-            {% for list in user_shared_lists %}
-                <a href="{% url 'shared_list_detail' list.id %}" class="nc-group-card">
-                    <div class="nc-group-avatar nc-color-3"><i class="bi bi-people-fill"></i></div>
-                    <div class="nc-group-card__name">{{ list.name }}</div>
-                    <div class="nc-group-card__meta">
-                        {% blocktrans count count=list.members.count %}{{ count }} member{% plural %}{{ count }} members{% endblocktrans %}
-                    </div>
-                </a>
-            {% endfor %}
-        </div>
-    {% endif %}
-
-    <!-- Groups -->
-    {% if user_groups %}
-        <div class="nc-section-label">{% trans "My groups" %} · {{ user_groups.count }}</div>
-        <div class="nc-groups-grid">
-            {% for group in user_groups %}
-                {% cycle "nc-color-1" "nc-color-2" "nc-color-3" "nc-color-4" "nc-color-5" "nc-color-6" "nc-color-7" "nc-color-8" as group_color silent %}
-                <a href="{% url 'group_detail' group.id %}" class="nc-group-card">
-                    {% if group.display_image_url %}
-                        <div class="nc-group-avatar" style="background:none; border-radius:14px; overflow:hidden; padding:0">
-                            <img src="{{ group.display_image_url }}" alt="{{ group.name }}"
-                                 style="width:100%; height:100%; object-fit:cover; border-radius:14px">
-                        </div>
-                    {% else %}
-                        <div class="nc-group-avatar {{ group_color }}">
-                            {{ group.name|first|upper }}
-                        </div>
+    <!-- Hero: personal gift list + stats, and shared list(s) -->
+    <div class="nc-hero-row">
+        <div class="nc-hero">
+            <div class="nc-hero__icon"><i class="bi bi-gift-fill"></i></div>
+            <div class="nc-hero__body">
+                <div class="nc-hero__title">{% trans "My gift list" %}</div>
+                <div class="nc-hero__sub">
+                    {% blocktrans count count=open_wish_count %}{{ count }} idea{% plural %}{{ count }} ideas{% endblocktrans %}
+                    {% if user_groups %}
+                        · {% blocktrans count count=user_groups.count %}visible in {{ count }} group{% plural %}visible in {{ count }} groups{% endblocktrans %}
                     {% endif %}
-                    <div class="nc-group-card__name">{{ group.name }}</div>
-                    <div class="nc-group-card__meta">{{ group.members.count }} {% trans "members" %}</div>
+                </div>
+            </div>
+            <a href="{% url 'view_list' request.user.id %}" class="nc-btn nc-btn--white nc-btn--sm">
+                <i class="bi bi-pencil" style="font-size:11px"></i>
+                {% trans "Edit" %}
+            </a>
+            <div class="nc-hero__stats">
+                <a href="{% url 'view_list' request.user.id %}" class="nc-hero__stat">
+                    <b>{{ open_wish_count }}</b><span>{% trans "active wishes" %}</span>
                 </a>
-            {% endfor %}
-
-            <button type="button" class="nc-group-card--new"
-                    data-bs-toggle="modal" data-bs-target="#createGroupModal">
-                <i class="bi bi-plus-lg" style="font-size:18px"></i>
-                <span>{% trans "New" %}</span>
-            </button>
-        </div>
-
-    {% else %}
-        <div class="nc-empty-state">
-            <span class="nc-empty-state__icon">👥</span>
-            <p class="nc-empty-state__title">{% trans "No groups yet" %}</p>
-            <p class="nc-empty-state__body">
-                {% trans "Create or join a group to start sharing your gift ideas." %}
-            </p>
-            <div class="nc-empty-state__actions">
-                <button type="button" class="nc-btn nc-btn--ghost"
-                        data-bs-toggle="modal" data-bs-target="#joinGroupModal">
-                    <i class="bi bi-person-plus"></i> {% trans "Join a group" %}
-                </button>
-                <button type="button" class="nc-btn nc-btn--primary"
-                        data-bs-toggle="modal" data-bs-target="#createGroupModal">
-                    <i class="bi bi-plus-lg"></i> {% trans "Create a group" %}
+                <button type="button" class="nc-hero__stat nc-hero__stat--button"
+                        id="reservationStatToggle"
+                        aria-controls="dashboardReservationsList"
+                        aria-expanded="false">
+                    <b>{{ my_reservation_count }}</b><span>{% trans "current reservations" %}</span>
                 </button>
             </div>
         </div>
-    {% endif %}
 
-    {% if user_event_lists %}
-        <div class="nc-section-label nc-section-label--spaced">{% trans "My event lists" %} · {{ user_event_lists.count }}</div>
-        <div class="nc-groups-grid">
-            {% for event in user_event_lists %}
-                <a href="{% url 'event_detail' token=event.access_token %}" class="nc-group-card nc-group-card--event">
-                    <div class="nc-event-card-avatar">{% if event.is_secret_santa %}🎄{% else %}🎁{% endif %}</div>
-                    <div class="nc-group-card__name">{{ event.name }}</div>
-                    <div class="nc-group-card__meta">
-                        {% if event.event_date %}{{ event.event_date|date:"j M Y" }}{% else %}—{% endif %}
+        {% for list in user_shared_lists %}
+            <a href="{% url 'shared_list_detail' list.id %}" class="nc-shared-strip">
+                <div class="nc-shared-strip__icon"><i class="bi bi-people-fill"></i></div>
+                <div class="nc-shared-strip__body">
+                    <div class="nc-shared-strip__name">{{ list.name }}</div>
+                    <div class="nc-shared-strip__meta">
+                        {% trans "Shared list" %} · {% blocktrans count count=list.members.count %}{{ count }} member{% plural %}{{ count }} members{% endblocktrans %}
+                        {% if list.gifts.count %} · {% blocktrans count count=list.gifts.count %}{{ count }} shared wish{% plural %}{{ count }} shared wishes{% endblocktrans %}{% endif %}
                     </div>
-                </a>
-            {% endfor %}
-            <button type="button" class="nc-group-card--new"
-                    data-bs-toggle="modal" data-bs-target="#createGroupModal"
-                    onclick="setTimeout(function(){ selectCreateType('event'); }, 150)">
-                <i class="bi bi-plus-lg" style="font-size:18px"></i>
-                <span>{% trans "New" %}</span>
-            </button>
-        </div>
-    {% endif %}
-
-    {% if participating_event_lists %}
-        <div class="nc-section-label nc-section-label--spaced">{% trans "Event lists I'm following" %} · {{ participating_event_lists.count }}</div>
-        <div class="nc-groups-grid">
-            {% for event in participating_event_lists %}
-                <div class="nc-group-card-wrap">
-                    <a href="{% url 'event_detail' token=event.access_token %}" class="nc-group-card nc-group-card--event">
-                        <div class="nc-event-card-avatar">{% if event.is_secret_santa %}🎄{% else %}🎁{% endif %}</div>
-                        <div class="nc-group-card__name">{{ event.name }}</div>
-                        <div class="nc-group-card__meta">
-                            {{ event.owner.nickname }}{% if event.event_date %} · {{ event.event_date|date:"j M Y" }}{% endif %}
-                        </div>
-                    </a>
-                    <form method="post" action="{% url 'leave_event_list' token=event.access_token %}" class="nc-group-card-leave">
-                        {% csrf_token %}
-                        <button type="submit" class="nc-group-card-leave-btn"
-                                title="{% trans 'Remove from my dashboard' %}">
-                            <i class="bi bi-x"></i>
-                        </button>
-                    </form>
                 </div>
-            {% endfor %}
-        </div>
-    {% endif %}
-        </aside>
-
-        <section class="nc-dashboard-main">
-
-    <div class="nc-dashboard-overview">
-        <div class="nc-dashboard-quick-actions">
-            <a href="{% url 'view_list' request.user.id %}" class="nc-quick-action">
-                <i class="bi bi-gift"></i>
-                <span>{% trans "Add a wish" %}</span>
+                <span class="nc-btn nc-btn--ghost nc-btn--sm nc-shared-strip__open">{% trans "Open" %}</span>
             </a>
-            <a href="https://addons.mozilla.org/fr/firefox/addon/noscadeaux-quick-add/"
-               target="_blank" rel="noopener" class="nc-quick-action">
-                <i class="bi bi-browser-firefox"></i>
-                <span>{% trans "Firefox extension" %}</span>
-            </a>
-        </div>
-
-        <div class="nc-dashboard-stats">
-            <a href="{% url 'view_list' request.user.id %}" class="nc-dashboard-stat">
-                <span class="nc-dashboard-stat__value">{{ open_wish_count }}</span>
-                <span class="nc-dashboard-stat__label">{% trans "active wishes" %}</span>
-            </a>
-            <button type="button" class="nc-dashboard-stat nc-dashboard-stat--button"
-                    id="reservationStatToggle"
-                    aria-controls="dashboardReservationsList"
-                    aria-expanded="false">
-                <span class="nc-dashboard-stat__value">{{ my_reservation_count }}</span>
-                <span class="nc-dashboard-stat__label">{% trans "current reservations" %}</span>
-            </button>
-        </div>
+        {% endfor %}
     </div>
 
-    {% if not user_groups and not user_event_lists %}
+    {% if not user_groups and not user_event_lists and not user_shared_lists and not participating_event_lists %}
         <div class="nc-dashboard-card nc-onboarding-card">
             <div class="nc-dashboard-card__header">
                 <div>
@@ -221,96 +98,202 @@
         </div>
     {% endif %}
 
-    <div class="nc-dashboard-grid">
-        <section class="nc-dashboard-card">
-            <div class="nc-dashboard-card__header">
-                <div>
-                    <div class="nc-section-label m-0">{% trans "Upcoming" %}</div>
-                    <h2>{% trans "Dates to watch" %}</h2>
-                </div>
-            </div>
-            <div class="nc-dashboard-list">
-                {% for event in upcoming_events %}
-                    <a href="{% url 'event_detail' token=event.access_token %}" class="nc-dashboard-list-row">
-                        <span class="nc-dashboard-row-icon nc-dashboard-row-icon--event"><i class="bi bi-calendar-event"></i></span>
-                        <span class="nc-dashboard-row-body">
-                            <strong>{{ event.name }}</strong>
-                            <small>{{ event.event_date|date:"j M Y" }}</small>
-                        </span>
-                    </a>
-                {% endfor %}
-                {% for birthday in upcoming_birthdays %}
-                    <a href="{% url 'view_list' birthday.member.id %}" class="nc-dashboard-list-row">
-                        <span class="nc-dashboard-row-icon nc-dashboard-row-icon--birthday"><i class="bi bi-cake2"></i></span>
-                        <span class="nc-dashboard-row-body">
-                            <strong>{{ birthday.member.nickname }}</strong>
-                            <small>
-                                {% if birthday.days_until == 0 %}
-                                    {% trans "Today" %}
-                                {% else %}
-                                    {% blocktrans count days=birthday.days_until %}in {{ days }} day{% plural %}in {{ days }} days{% endblocktrans %}
-                                {% endif %}
-                            </small>
-                        </span>
-                    </a>
-                {% endfor %}
-                {% if not upcoming_events and not upcoming_birthdays %}
-                    <div class="nc-dashboard-empty">{% trans "No upcoming event or birthday in your groups." %}</div>
-                {% endif %}
-            </div>
-        </section>
-
-        <section class="nc-dashboard-card">
-            <div class="nc-dashboard-card__header">
-                <div>
-                    <div class="nc-section-label m-0">{% trans "Reservations" %}</div>
-                    <h2>{% trans "Gifts you reserved" %}</h2>
-                </div>
-                {% if my_reservation_count %}
+    <div class="nc-cols">
+        <div class="nc-col">
+            <div class="nc-col__head">
+                <div class="nc-section-label mb-0">{% trans "My groups" %}</div>
+                <div class="nc-col__head-actions">
                     <button type="button" class="nc-btn nc-btn--ghost nc-btn--sm"
-                            id="reservationListToggle"
-                            aria-controls="dashboardReservationsList"
-                            aria-expanded="false"
-                            data-show-label="{% trans 'Show' %}"
-                            data-hide-label="{% trans 'Hide' %}">
-                        <i class="bi bi-eye"></i>
-                        <span>{% trans "Show" %}</span>
+                            data-bs-toggle="modal" data-bs-target="#joinGroupModal">
+                        {% trans "Join a group" %}
                     </button>
-                {% endif %}
-            </div>
-            <div class="nc-dashboard-list" id="dashboardReservationsList">
-                {% if my_reservation_count %}
-                    <button type="button" class="nc-dashboard-reservations-placeholder"
-                            id="reservationPlaceholderToggle"
-                            aria-controls="dashboardReservationsList"
-                            aria-expanded="false">
-                        <span class="nc-dashboard-row-icon nc-dashboard-row-icon--reservation"><i class="bi bi-eye-slash"></i></span>
-                        <span class="nc-dashboard-row-body">
-                            <strong>{% trans "Reserved gifts are hidden" %}</strong>
-                            <small>{% trans "Click to show your reserved gifts." %}</small>
-                        </span>
+                    <button type="button" class="nc-btn nc-btn--primary nc-btn--sm"
+                            data-bs-toggle="modal" data-bs-target="#createGroupModal">
+                        <i class="bi bi-plus-lg" style="font-size:11px"></i>
+                        {% trans "New group" %}
                     </button>
-                    <div class="d-none" id="dashboardReservationsRows">
-                        {% for reservation in my_reservations %}
-                            <a href="{% if reservation.gift.shared_list_id %}{% url 'shared_list_detail' reservation.gift.shared_list_id %}{% else %}{% url 'view_list' reservation.gift.owner.id %}{% endif %}{% if reservation.gift.group_reserved_on_id %}?from_group={{ reservation.gift.group_reserved_on_id }}{% endif %}"
-                               class="nc-dashboard-list-row">
-                                <span class="nc-dashboard-row-icon nc-dashboard-row-icon--reservation"><i class="bi bi-lock-fill"></i></span>
-                                <span class="nc-dashboard-row-body">
-                                    <strong>{{ reservation.gift.title }}</strong>
-                                    <small>{% if reservation.gift.shared_list_id %}{{ reservation.gift.shared_list.name }}{% else %}{{ reservation.gift.owner.nickname }}{% endif %}{% if reservation.exclusivity %} · {% trans "exclusive" %}{% endif %}</small>
-                                </span>
-                            </a>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="nc-dashboard-empty">{% trans "You have no active reservation yet." %}</div>
-                {% endif %}
+                </div>
             </div>
-        </section>
-    </div>
 
-    {% if balance_summaries or recent_group_gifts %}
-        <div class="nc-dashboard-grid">
+            {% if user_groups or user_event_lists or participating_event_lists %}
+                <div class="nc-spaces-grid">
+                    {% for group in user_groups %}
+                        {% cycle "nc-color-1" "nc-color-2" "nc-color-3" "nc-color-4" "nc-color-5" "nc-color-6" "nc-color-7" "nc-color-8" as group_color silent %}
+                        <a href="{% url 'group_detail' group.id %}" class="nc-space">
+                            <div class="nc-space__cover">
+                                {% if group.display_image_url %}
+                                    <img src="{{ group.display_image_url }}" alt="{{ group.name }}">
+                                {% endif %}
+                                {% for birthday in upcoming_birthdays %}
+                                    {% if birthday.member in group.members.all %}
+                                        <span class="nc-tag">
+                                            🎂 {{ birthday.member.nickname }} ·
+                                            {% if birthday.days_until == 0 %}{% trans "Today" %}{% else %}{% blocktrans count days=birthday.days_until %}{{ days }}d{% plural %}{{ days }}d{% endblocktrans %}{% endif %}
+                                        </span>
+                                    {% endif %}
+                                {% endfor %}
+                                <div class="nc-space__avatar {{ group_color }}">{{ group.name|first|upper }}</div>
+                            </div>
+                            <div class="nc-space__body">
+                                <div class="nc-space__name">{{ group.name }}</div>
+                                <div class="nc-space__meta">{% blocktrans count count=group.members.count %}{{ count }} member{% plural %}{{ count }} members{% endblocktrans %}</div>
+                            </div>
+                        </a>
+                    {% endfor %}
+
+                    {% for event in user_event_lists %}
+                        <a href="{% url 'event_detail' token=event.access_token %}" class="nc-space">
+                            <div class="nc-space__cover">
+                                <div class="nc-space__avatar nc-color-7">{% if event.is_secret_santa %}🎄{% else %}🎁{% endif %}</div>
+                            </div>
+                            <div class="nc-space__body">
+                                <div class="nc-space__name">{{ event.name }}</div>
+                                <div class="nc-space__meta">{% if event.event_date %}{{ event.event_date|date:"j M Y" }}{% else %}—{% endif %}</div>
+                            </div>
+                        </a>
+                    {% endfor %}
+
+                    {% for event in participating_event_lists %}
+                        <div class="nc-space-wrap">
+                            <a href="{% url 'event_detail' token=event.access_token %}" class="nc-space">
+                                <div class="nc-space__cover">
+                                    <div class="nc-space__avatar nc-color-5">{% if event.is_secret_santa %}🎄{% else %}🎁{% endif %}</div>
+                                </div>
+                                <div class="nc-space__body">
+                                    <div class="nc-space__name">{{ event.name }}</div>
+                                    <div class="nc-space__meta">{{ event.owner.nickname }}{% if event.event_date %} · {{ event.event_date|date:"j M Y" }}{% endif %}</div>
+                                </div>
+                            </a>
+                            <form method="post" action="{% url 'leave_event_list' token=event.access_token %}" class="nc-space-leave">
+                                {% csrf_token %}
+                                <button type="submit" class="nc-space-leave-btn"
+                                        title="{% trans 'Remove from my dashboard' %}">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </form>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="nc-empty-state">
+                    <span class="nc-empty-state__icon">👥</span>
+                    <p class="nc-empty-state__title">{% trans "No groups yet" %}</p>
+                    <p class="nc-empty-state__body">
+                        {% trans "Create or join a group to start sharing your gift ideas." %}
+                    </p>
+                    <div class="nc-empty-state__actions">
+                        <button type="button" class="nc-btn nc-btn--ghost"
+                                data-bs-toggle="modal" data-bs-target="#joinGroupModal">
+                            <i class="bi bi-person-plus"></i> {% trans "Join a group" %}
+                        </button>
+                        <button type="button" class="nc-btn nc-btn--primary"
+                                data-bs-toggle="modal" data-bs-target="#createGroupModal">
+                            <i class="bi bi-plus-lg"></i> {% trans "Create a group" %}
+                        </button>
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="nc-quick-actions">
+                <a href="{% url 'view_list' request.user.id %}" class="nc-quick-action">
+                    <i class="bi bi-gift"></i>
+                    <span>{% trans "Add a wish" %}</span>
+                </a>
+                <a href="https://addons.mozilla.org/fr/firefox/addon/noscadeaux-quick-add/"
+                   target="_blank" rel="noopener" class="nc-quick-action">
+                    <i class="bi bi-browser-firefox"></i>
+                    <span>{% trans "Firefox extension" %}</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="nc-col">
+            <section class="nc-dashboard-card">
+                <div class="nc-dashboard-card__header">
+                    <div>
+                        <div class="nc-section-label m-0">{% trans "Upcoming" %}</div>
+                        <h2>{% trans "Dates to watch" %}</h2>
+                    </div>
+                </div>
+                <div class="nc-dashboard-list">
+                    {% for event in upcoming_events %}
+                        <a href="{% url 'event_detail' token=event.access_token %}" class="nc-dashboard-list-row">
+                            <span class="nc-dashboard-row-icon nc-dashboard-row-icon--event"><i class="bi bi-calendar-event"></i></span>
+                            <span class="nc-dashboard-row-body">
+                                <strong>{{ event.name }}</strong>
+                                <small>{{ event.event_date|date:"j M Y" }}</small>
+                            </span>
+                        </a>
+                    {% endfor %}
+                    {% for birthday in upcoming_birthdays %}
+                        <a href="{% url 'view_list' birthday.member.id %}" class="nc-dashboard-list-row">
+                            <span class="nc-dashboard-row-icon nc-dashboard-row-icon--birthday"><i class="bi bi-cake2"></i></span>
+                            <span class="nc-dashboard-row-body">
+                                <strong>{{ birthday.member.nickname }}</strong>
+                                <small>
+                                    {% if birthday.days_until == 0 %}
+                                        {% trans "Today" %}
+                                    {% else %}
+                                        {% blocktrans count days=birthday.days_until %}in {{ days }} day{% plural %}in {{ days }} days{% endblocktrans %}
+                                    {% endif %}
+                                </small>
+                            </span>
+                        </a>
+                    {% endfor %}
+                    {% if not upcoming_events and not upcoming_birthdays %}
+                        <div class="nc-dashboard-empty">{% trans "No upcoming event or birthday in your groups." %}</div>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="nc-dashboard-card">
+                <div class="nc-dashboard-card__header">
+                    <div>
+                        <div class="nc-section-label m-0">{% trans "Reservations" %}</div>
+                        <h2>{% trans "Gifts you reserved" %}</h2>
+                    </div>
+                    {% if my_reservation_count %}
+                        <button type="button" class="nc-btn nc-btn--ghost nc-btn--sm"
+                                id="reservationListToggle"
+                                aria-controls="dashboardReservationsList"
+                                aria-expanded="false"
+                                data-show-label="{% trans 'Show' %}"
+                                data-hide-label="{% trans 'Hide' %}">
+                            <i class="bi bi-eye"></i>
+                            <span>{% trans "Show" %}</span>
+                        </button>
+                    {% endif %}
+                </div>
+                <div class="nc-dashboard-list" id="dashboardReservationsList">
+                    {% if my_reservation_count %}
+                        <button type="button" class="nc-dashboard-reservations-placeholder"
+                                id="reservationPlaceholderToggle"
+                                aria-controls="dashboardReservationsList"
+                                aria-expanded="false">
+                            <span class="nc-dashboard-row-icon nc-dashboard-row-icon--reservation"><i class="bi bi-eye-slash"></i></span>
+                            <span class="nc-dashboard-row-body">
+                                <strong>{% trans "Reserved gifts are hidden" %}</strong>
+                                <small>{% trans "Click to show your reserved gifts." %}</small>
+                            </span>
+                        </button>
+                        <div class="d-none" id="dashboardReservationsRows">
+                            {% for reservation in my_reservations %}
+                                <a href="{% if reservation.gift.shared_list_id %}{% url 'shared_list_detail' reservation.gift.shared_list_id %}{% else %}{% url 'view_list' reservation.gift.owner.id %}{% endif %}{% if reservation.gift.group_reserved_on_id %}?from_group={{ reservation.gift.group_reserved_on_id }}{% endif %}"
+                                   class="nc-dashboard-list-row">
+                                    <span class="nc-dashboard-row-icon nc-dashboard-row-icon--reservation"><i class="bi bi-lock-fill"></i></span>
+                                    <span class="nc-dashboard-row-body">
+                                        <strong>{{ reservation.gift.title }}</strong>
+                                        <small>{% if reservation.gift.shared_list_id %}{{ reservation.gift.shared_list.name }}{% else %}{{ reservation.gift.owner.nickname }}{% endif %}{% if reservation.exclusivity %} · {% trans "exclusive" %}{% endif %}</small>
+                                    </span>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="nc-dashboard-empty">{% trans "You have no active reservation yet." %}</div>
+                    {% endif %}
+                </div>
+            </section>
+
             {% if balance_summaries %}
                 <section class="nc-dashboard-card">
                     <div class="nc-dashboard-card__header">
@@ -363,9 +346,6 @@
                 </section>
             {% endif %}
         </div>
-    {% endif %}
-
-        </section>
     </div>
 
 </div>
@@ -400,6 +380,11 @@
                             <span class="nc-create-type-icon">🎄</span>
                             <span class="nc-create-type-label">{% trans "Secret Santa" %}</span>
                             <span class="nc-create-type-desc">{% trans "Draw names, set a budget, manage exclusions" %}</span>
+                        </button>
+                        <button type="button" class="nc-create-type-card" onclick="selectCreateType('shared_list')">
+                            <span class="nc-create-type-icon">🔗</span>
+                            <span class="nc-create-type-label">{% trans "Shared list" %}</span>
+                            <span class="nc-create-type-desc">{% trans "A joint list you build together with someone" %}</span>
                         </button>
                     </div>
                 </div>
@@ -531,6 +516,16 @@
     <script>
         /* 2-step create modal */
         function selectCreateType(type) {
+            if (type === 'shared_list') {
+                const groupModalEl = document.getElementById('createGroupModal');
+                const groupModal = bootstrap.Modal.getOrCreateInstance(groupModalEl);
+                groupModalEl.addEventListener('hidden.bs.modal', function openSharedListModal() {
+                    groupModalEl.removeEventListener('hidden.bs.modal', openSharedListModal);
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('createSharedListModal')).show();
+                });
+                groupModal.hide();
+                return;
+            }
             document.getElementById('createStep1').classList.add('d-none');
             document.getElementById('createStep1Footer').classList.add('d-none');
             if (type === 'classic') {
@@ -585,7 +580,7 @@
         });
 
         /* Gift wrapping: hold a dashboard card, then click it to unwrap. */
-        document.querySelectorAll('.nc-dashboard-groups-sidebar .nc-group-card').forEach(card => {
+        document.querySelectorAll('.nc-spaces-grid .nc-space').forEach(card => {
             const holdDuration = 650;
             const moveTolerance = 12;
             let holdTimer = null;
