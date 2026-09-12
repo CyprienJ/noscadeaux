@@ -106,6 +106,7 @@ class User(AbstractUser):
     pending_group_invite_token = models.CharField(max_length=128, blank=True, default="")
     verification_email_sent_at = models.DateTimeField(blank=True, null=True)
     last_seen_version = models.CharField(max_length=20, blank=True, default="")
+    dashboard_simple_mode = models.BooleanField(default=False)
     managed_by = models.ForeignKey("self", on_delete=models.CASCADE, related_name="sub_accounts", blank=True, null=True)
     subscriptions = models.ManyToManyField(
         "self",

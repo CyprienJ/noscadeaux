@@ -4,7 +4,7 @@
 {% block title %}{% trans "Dashboard" %}{% endblock %}
 
 {% block content %}
-<div class="nc-dashboard">
+<div class="nc-dashboard{% if request.user.dashboard_simple_mode %} nc-dashboard--simple{% endif %}">
 
     <!-- Page header -->
     <header class="nc-dashboard__header">
@@ -24,6 +24,12 @@
             </p>
         </div>
         <div class="nc-dashboard__actions">
+            <button type="button" id="simpleModeToggle"
+                    class="nc-btn nc-btn--ghost{% if request.user.dashboard_simple_mode %} nc-btn--on{% endif %}"
+                    aria-pressed="{% if request.user.dashboard_simple_mode %}true{% else %}false{% endif %}">
+                <i class="bi bi-grid" style="font-size:13px"></i>
+                {% trans "Simple mode" %}
+            </button>
             <button type="button" class="nc-btn nc-btn--ghost"
                     data-bs-toggle="modal" data-bs-target="#joinGroupModal">
                 <i class="bi bi-person-plus" style="font-size:13px"></i>
@@ -207,7 +213,7 @@
             </div>
         </div>
 
-        <div class="nc-col">
+        <div class="nc-col nc-dashboard-rail">
             <section class="nc-dashboard-card">
                 <div class="nc-dashboard-card__header">
                     <div>
@@ -552,6 +558,26 @@
             document.getElementById('createStep1').classList.remove('d-none');
             document.getElementById('createStep1Footer').classList.remove('d-none');
         }
+
+        /* Simple mode: hides the rail and shrinks the layout to one column.
+           Persisted on the user so it follows them across devices/logins. */
+        document.addEventListener('DOMContentLoaded', function () {
+            const btn = document.getElementById('simpleModeToggle');
+            const dashboard = document.querySelector('.nc-dashboard');
+            if (!btn || !dashboard) return;
+
+            btn.addEventListener('click', function () {
+                const simple = dashboard.classList.toggle('nc-dashboard--simple');
+                btn.classList.toggle('nc-btn--on', simple);
+                btn.setAttribute('aria-pressed', simple ? 'true' : 'false');
+
+                fetch("{% url 'set_dashboard_simple_mode' %}", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                    body: JSON.stringify({simple: simple}),
+                });
+            });
+        });
 
         /* Reset modal on close */
         document.addEventListener('DOMContentLoaded', function() {
