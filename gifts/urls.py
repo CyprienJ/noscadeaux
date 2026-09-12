@@ -15,6 +15,7 @@ urlpatterns = [
     path("bug-report/", bug_reports.bug_report, name="bug_report"),
     path("bug-report/success/", bug_reports.bug_report_success, name="bug_report_success"),
     path("dashboard/", views.dashboard, name="dashboard"),
+    path("dashboard/simple-mode/", views.set_dashboard_simple_mode, name="set_dashboard_simple_mode"),
     # Auth
     path("demo/", account.demo_login, name="demo_login"),
     path("login/", account.OnboardingLoginView.as_view(), name="login"),

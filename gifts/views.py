@@ -537,6 +537,19 @@ def dashboard(request):
     )
 
 
+@login_required
+@require_POST
+def set_dashboard_simple_mode(request: HttpRequest):
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return HttpResponseBadRequest("Invalid JSON")
+
+    simple = bool(payload.get("simple"))
+    User.objects.filter(pk=request.user.pk).update(dashboard_simple_mode=simple)
+    return JsonResponse({"simple": simple})
+
+
 def _upcoming_birthdays(user, groups, today):
     members = (
         User.objects.filter(gift_groups__in=groups, birthday_month__isnull=False, birthday_day__isnull=False)

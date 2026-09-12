@@ -258,6 +258,13 @@ body {
 .nc-btn--sm { padding: 5px 12px; font-size: 12px; }
 .nc-btn--xs { padding: 4px 10px; font-size: 11px; }
 
+.nc-btn--on {
+    background: var(--nc-accent-light);
+    border-color: var(--nc-accent);
+    color: var(--nc-accent);
+}
+.nc-btn--on:hover { background: var(--nc-accent-light); color: var(--nc-accent); }
+
 /* ── Avatar color palette ────────────────────────────────────── */
 .nc-color-1  { background-color: oklch(72% 0.14 30); }
 .nc-color-2  { background-color: oklch(68% 0.14 150); }
@@ -1248,6 +1255,14 @@ body {
 }
 .nc-empty-state__body { font-size: 14px; color: var(--nc-text-muted); margin-bottom: 24px; }
 .nc-empty-state__actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* Simple mode: single-column dashboard with the rail and hero stats hidden,
+   bigger space cards. Persisted on the user, applied server-side on render. */
+.nc-dashboard--simple .nc-dashboard-rail { display: none; }
+.nc-dashboard--simple .nc-cols { grid-template-columns: minmax(0, 1fr); }
+.nc-dashboard--simple .nc-hero__stats { display: none; }
+.nc-dashboard--simple .nc-spaces-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.nc-dashboard--simple .nc-space__cover { height: 200px; }
 
 /* ── Group Page Layout ───────────────────────────────────────── */
 .nc-group-layout {
