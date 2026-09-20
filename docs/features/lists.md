@@ -24,6 +24,8 @@ list view. Managed-person lists are an exception: those ideas appear as wishes.
 Personal wishes can have a title, description, product URL, tags, and selected
 groups. The model also holds price, currency, and image URL, used by product
 capture and other gift actions. These fields are not all entered by the same form.
+Descriptions support multiple lines when adding or editing a wish, including on
+mobile devices. Line breaks are preserved in the wish detail view.
 
 A personal owner can save a draft. Drafts are omitted from visitor lists and from
 new-gift notifications. Offered gifts leave the active list and enter history.

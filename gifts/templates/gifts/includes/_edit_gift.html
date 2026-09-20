@@ -29,12 +29,11 @@
                                        required>
                             </div>
                             <div class="mb-3">
-                                <input type="text"
-                                       name="description"
-                                       class="form-control"
-                                       placeholder="{% trans 'Description' %}"
-                                       aria-label="{% trans 'Description' %}"
-                                       value="{{ item.gift.description }}">
+                                <textarea name="description"
+                                          class="form-control"
+                                          rows="3"
+                                          placeholder="{% trans 'Description' %}"
+                                          aria-label="{% trans 'Description' %}">{{ item.gift.description }}</textarea>
                             </div>
                             <div class="mb-3">
                                 <input type="url"
