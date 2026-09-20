@@ -106,6 +106,7 @@ urlpatterns = [
     ),
     # List
     path("list/<int:user_id>/", views.view_list, name="view_list"),
+    path("list/<int:user_id>/export/", views.export_gift_list_csv, name="export_gift_list"),
     path("add-gift/<int:owner_id>/", views.add_gift, name="add_gift"),
     path("edit-gift/<int:gift_id>/", views.edit_gift, name="edit_gift"),
     path("delete-gift/<int:gift_id>/", views.delete_gift, name="delete_gift"),

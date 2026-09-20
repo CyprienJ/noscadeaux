@@ -1,3 +1,4 @@
+import csv
 import datetime
 import heapq
 import json
@@ -338,6 +339,41 @@ def _render_reservation_modal(request, gift, group_id, reservations, extra_exclu
     return render(request, RESERVE_MODAL_MODEL_PATH, context)
 
 
+def _row_reservation_item(request, gift, group_id, reservations, extra_exclude_ids=None):
+    user_res = next((r for r in reservations if r.reserver_id == request.user.id), None)
+    group = get_object_or_404(Group, id=group_id)
+    if gift.shared_list_id:
+        recipient_ids = list(gift.shared_list.members.values_list("id", flat=True))
+    else:
+        recipient_ids = [gift.owner_id]
+    exclude_ids = [request.user.id, *recipient_ids, *(r.reserver_id for r in reservations)]
+    if extra_exclude_ids:
+        exclude_ids += list(extra_exclude_ids)
+    other_members = group.members.exclude(id__in=exclude_ids)
+    return {
+        "current_user": request.user,
+        "gift": gift,
+        "reservations": reservations,
+        "user_reservation": user_res,
+        "other_non_participant": other_members,
+        "group_id": group_id,
+        "reservation_state": _reservation_state(gift, reservations, request.user, group_id),
+    }
+
+
+def _row_reservation_response(request, gift, group_id, reservations, extra_exclude_ids=None):
+    item = _row_reservation_item(request, gift, group_id, reservations, extra_exclude_ids)
+    context = {"item": item}
+    return JsonResponse(
+        {
+            "success": True,
+            "pill_html": render_to_string("gifts/includes/_wish_resv_pill.html", context, request=request),
+            "actions_html": render_to_string("gifts/includes/_wish_resv_actions.html", context, request=request),
+            "strip_html": render_to_string("gifts/includes/_wish_resv_strip.html", context, request=request),
+        }
+    )
+
+
 def _build_amounts_modal_context(gift, offer_group, reservations):
     givers = list(offer_group.members.exclude(id=gift.owner_id)) if offer_group else []
     payer_res = next((r for r in reservations if r.amount_paid), None) or (reservations[0] if reservations else None)
@@ -599,6 +635,25 @@ def emojis():
         return gift_emojis
 
 
+def _gift_list_access(request, target_user):
+    group_id = request.GET.get("from_group")
+    group = get_object_or_404(Group, id=group_id) if group_id else None
+    common_groups = []
+    if request.user.id != target_user.id:
+        common_groups = list(Group.objects.filter(members=request.user).filter(members=target_user))
+        has_secret_santa_access = SecretSantaAssignment.objects.filter(
+            giver=request.user,
+            receiver=target_user,
+            giver_guest__isnull=True,
+            receiver_guest__isnull=True,
+        ).exists()
+        if not common_groups and not has_secret_santa_access:
+            return group, common_groups, render(request, USER_NOT_FOUND_TEMPLATE, status=403)
+        if group and group.id not in {g.id for g in common_groups}:
+            return group, common_groups, render(request, USER_NOT_FOUND_TEMPLATE, status=403)
+    return group, common_groups, None
+
+
 @login_required
 def view_list(request: HttpRequest, user_id: int):
     target_user = User.objects.filter(id=user_id).first()
@@ -609,24 +664,9 @@ def view_list(request: HttpRequest, user_id: int):
 
     is_owner = request.user.id == target_user.id
     from_group_id = request.GET.get("from_group")
-    common_groups = []
-
-    group = None
-    if from_group_id:
-        group = get_object_or_404(Group, id=from_group_id)
-
-    if not is_owner:
-        common_groups = list(Group.objects.filter(members=request.user).filter(members=target_user))
-        has_secret_santa_access = SecretSantaAssignment.objects.filter(
-            giver=request.user,
-            receiver=target_user,
-            giver_guest__isnull=True,
-            receiver_guest__isnull=True,
-        ).exists()
-        if not common_groups and not has_secret_santa_access:
-            return render(request, USER_NOT_FOUND_TEMPLATE, status=403)
-        if group and group.id not in {g.id for g in common_groups}:
-            return render(request, USER_NOT_FOUND_TEMPLATE, status=403)
+    group, common_groups, error = _gift_list_access(request, target_user)
+    if error is not None:
+        return error
 
     all_gifts_query: QuerySet[Gift] = Gift.objects.filter(
         owner=target_user,
@@ -805,6 +845,80 @@ def view_list(request: HttpRequest, user_id: int):
             "shared_lists_for_move": request.user.shared_lists.filter(deleted_at__isnull=True) if is_owner else [],
         },
     )
+
+
+def _gift_list_csv_gifts(target_user, is_owner, from_group_id):
+    gifts_query = Gift.objects.filter(
+        owner=target_user,
+        shared_list__isnull=True,
+        event_list__isnull=True,
+        offered=False,
+    ).prefetch_related("tags")
+    if is_owner:
+        gifts_query = gifts_query.filter(created_by=target_user)
+    else:
+        gifts_query = gifts_query.filter(is_draft=False)
+        if from_group_id:
+            gifts_query = gifts_query.filter(Q(visible_in__isnull=True) | Q(visible_in__id=from_group_id)).distinct()
+    return gifts_query.order_by("created_at", "id")
+
+
+def _gift_list_csv_row(gift, target_user, is_owner):
+    if is_owner:
+        section = _("Draft") if gift.is_draft else _("Wish")
+    else:
+        section = _("Wish") if (gift.created_by_id == gift.owner_id or target_user.is_managed) else _("Surprise")
+    return [
+        gift.title,
+        gift.description,
+        gift.url,
+        gift.price if gift.price is not None else "",
+        gift.currency,
+        ", ".join(tag.label for tag in gift.tags.all()),
+        section,
+        gift.created_at.strftime("%Y-%m-%d"),
+    ]
+
+
+@login_required
+@require_GET
+def export_gift_list_csv(request, user_id):
+    target_user = User.objects.filter(id=user_id).first()
+    if not target_user:
+        return render(request, USER_NOT_FOUND_TEMPLATE, status=404)
+    if not has_same_demo_scope(request.user, target_user):
+        return render(request, USER_NOT_FOUND_TEMPLATE, status=403)
+
+    _group, _common_groups, error = _gift_list_access(request, target_user)
+    if error is not None:
+        return error
+
+    is_owner = request.user.id == target_user.id
+    gifts_query = _gift_list_csv_gifts(target_user, is_owner, request.GET.get("from_group"))
+
+    response = HttpResponse(content_type="text/csv")
+    filename = f"list-{target_user.nickname}.csv".replace(" ", "_")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.write("﻿")
+
+    writer = csv.writer(response)
+    writer.writerow(
+        [
+            _("Title"),
+            _("Description"),
+            _("URL"),
+            _("Price"),
+            _("Currency"),
+            _("Tags"),
+            _("Section"),
+            _("Added on"),
+        ]
+    )
+
+    for gift in gifts_query:
+        writer.writerow(_gift_list_csv_row(gift, target_user, is_owner))
+
+    return response
 
 
 @login_required
@@ -1302,6 +1416,8 @@ def reserve_gift(request: HttpRequest, gift_id: int):
 
     reservations = Reservation.objects.filter(gift=gift).select_related("reserver").order_by("id")
     participant_ids = {r.reserver.id for r in reservations}
+    if data.get("context") == "row":
+        return _row_reservation_response(request, gift, group_id, reservations, extra_exclude_ids=participant_ids)
     return _render_reservation_modal(request, gift, group_id, reservations, extra_exclude_ids=participant_ids)
 
 
@@ -1346,6 +1462,8 @@ def modify_reservation(request: HttpRequest, gift_id: int):
     elif gift.group_reserved_on_id is None:
         gift.group_reserved_on = group
         gift.save()
+    if data.get("context") == "row":
+        return _row_reservation_response(request, gift, group_id, reservations)
     return _render_reservation_modal(request, gift, group_id, reservations)
 
 
@@ -1385,6 +1503,8 @@ def delete_reservation(request, gift_id):
     else:
         gift.group_reserved_on = None
         gift.save()
+    if data.get("context") == "row":
+        return _row_reservation_response(request, gift, group_id, reservations)
     return _render_reservation_modal(request, gift, group_id, reservations)
 
 

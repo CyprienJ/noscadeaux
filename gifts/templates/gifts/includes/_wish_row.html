@@ -1,6 +1,7 @@
 {% load i18n %}
 {# Params: icon_class (accent|gold), is_surprise (1 or omit), edit_modal_id #}
 {% with state=item.reservation_state %}
+<div class="nc-wish-item">
 <div class="nc-wish-row {% if state %}nc-wish-row--{{ state.status }}{% endif %}">
 
     {# Icon #}
@@ -86,14 +87,9 @@
                 {% endif %}
             {% endwith %}
         {% endif %}
-        {% if state %}
-            <span class="nc-wish-status nc-wish-status--{{ state.status }}">
-                <i class="bi {{ state.icon }}"></i> {{ state.label }}
-                {% if state.participant_count > 1 %}
-                    <span class="nc-wish-status__count">{{ state.participant_count }}</span>
-                {% endif %}
-            </span>
-        {% endif %}
+        <span id="wish-resv-pill-{{ item.gift.id }}">
+            {% include "gifts/includes/_wish_resv_pill.html" %}
+        </span>
         {% if item.comments %}
             <span class="nc-wish-meta-chip">
                 <i class="bi bi-chat-left-text"></i> {{ item.comments|length }}
@@ -105,23 +101,9 @@
     <div class="nc-wish-actions">
         {% if not item.hide_shared_reservation %}
         {% if is_surprise or not is_owner %}
-            {% if state.can_open %}
-                <button class="nc-wish-reserve-btn nc-wish-reserve-btn--{{ state.status }}"
-                        data-bs-toggle="modal"
-                        data-bs-target="#reserveModal{{ item.gift.id }}">
-                    <i class="bi {{ state.icon }}"></i> {{ state.action_label }}
-                </button>
-                {% if state.can_offer %}
-                    <button class="nc-wish-offer-btn"
-                            onclick="offerFromList('{% url 'offer_gift' gift_id=item.gift.id %}', {{ item.gift.group_reserved_on.id|default:from_group_id|default:'null' }})">
-                        <i class="bi bi-gift-fill"></i><span class="nc-btn-label">{% trans "Offered!" %}</span>
-                    </button>
-                {% endif %}
-            {% else %}
-                <button class="nc-wish-reserve-btn" disabled>
-                    <i class="bi {{ state.icon }}"></i> {{ state.action_label }}
-                </button>
-            {% endif %}
+            <span id="wish-resv-actions-{{ item.gift.id }}">
+                {% include "gifts/includes/_wish_resv_actions.html" %}
+            </span>
         {% endif %}
         {% endif %}
 
@@ -180,5 +162,13 @@
         {% endif %}
         {% endif %}
     </div>
+</div>
+{% if not item.hide_shared_reservation %}
+{% if is_surprise or not is_owner %}
+    <div id="wish-resv-strip-{{ item.gift.id }}">
+        {% include "gifts/includes/_wish_resv_strip.html" %}
+    </div>
+{% endif %}
+{% endif %}
 </div>
 {% endwith %}

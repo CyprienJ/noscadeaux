@@ -1,0 +1,10 @@
+{% with state=item.reservation_state %}
+{% if state %}
+    <span class="nc-wish-status nc-wish-status--{{ state.status }}">
+        <i class="bi {{ state.icon }}"></i> {{ state.label }}
+        {% if state.participant_count > 1 %}
+            <span class="nc-wish-status__count">{{ state.participant_count }}</span>
+        {% endif %}
+    </span>
+{% endif %}
+{% endwith %}

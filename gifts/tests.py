@@ -535,7 +535,7 @@ class ReservationFlowTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "nc-wish-status--participating_by_others")
-        self.assertContains(response, "nc-wish-reserve-btn--participating_by_others")
+        self.assertContains(response, "nc-btn--green")
 
     def test_list_shows_exclusive_state_for_other_reservation(self):
         Reservation.objects.create(gift=self.gift, reserver=self.user3, exclusivity=True)
@@ -607,6 +607,53 @@ class ReservationFlowTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.gift.refresh_from_db()
         self.assertIsNone(self.gift.group_reserved_on)
+
+    def test_reserve_gift_row_context_returns_json_fragments(self):
+        self.client.force_login(self.user2)
+        response = self._json_post(
+            reverse("reserve_gift", args=[self.gift.id]),
+            {"exclusivity": True, "user_id": self.user2.id, "group_id": self.group.id, "context": "row"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertIn("nc-resv-toggle", data["actions_html"])
+        self.assertIn("nc-wish-status--reserved_by_me_exclusive", data["pill_html"])
+        self.assertIn("nc-resv-chip", data["strip_html"])
+
+    def test_modify_reservation_row_context_toggles_exclusivity(self):
+        Reservation.objects.create(gift=self.gift, reserver=self.user2, exclusivity=True)
+        self.gift.group_reserved_on = self.group
+        self.gift.save()
+
+        self.client.force_login(self.user3)
+        response = self._json_post(
+            reverse("modify_reservation", args=[self.gift.id]),
+            {"reservation_user_id_to_modify": self.user2.id, "group_id": self.group.id, "context": "row"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertFalse(Reservation.objects.get(gift=self.gift, reserver=self.user2).exclusivity)
+        self.assertIn("nc-wish-status--participating_by_others", data["pill_html"])
+
+    def test_delete_reservation_row_context_returns_json_fragments(self):
+        Reservation.objects.create(gift=self.gift, reserver=self.user2)
+        self.gift.group_reserved_on = self.group
+        self.gift.save()
+
+        self.client.force_login(self.user2)
+        response = self._json_post(
+            reverse("delete_reservation", args=[self.gift.id]),
+            {"reservation_user_id_to_delete": self.user2.id, "group_id": self.group.id, "context": "row"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertNotIn("nc-resv-chip", data["strip_html"])
 
 
 class GiftCommentTest(TestCase):
