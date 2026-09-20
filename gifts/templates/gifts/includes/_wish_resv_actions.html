@@ -1,0 +1,72 @@
+{% load i18n %}
+{% with state=item.reservation_state %}
+<div class="nc-resv-actions">
+    {% if state.status == "available" %}
+        <button type="button" class="nc-btn nc-btn--primary nc-btn--sm"
+                onclick="resvReserveRow('{% url 'reserve_gift' gift_id=item.gift.id %}', true, {{ item.gift.id }}, {{ item.current_user.id }}, {{ item.group_id }})">
+            <i class="bi bi-lock-fill"></i> {% trans "Reserve alone" %}
+        </button>
+        <button type="button" class="nc-btn nc-btn--outline nc-btn--sm"
+                onclick="resvReserveRow('{% url 'reserve_gift' gift_id=item.gift.id %}', false, {{ item.gift.id }}, {{ item.current_user.id }}, {{ item.group_id }})">
+            <i class="bi bi-people-fill"></i> {% trans "Open participation" %}
+        </button>
+    {% elif not state.can_open %}
+        <button type="button" class="nc-wish-reserve-btn" disabled>
+            <i class="bi {{ state.icon }}"></i> {{ state.action_label }}
+        </button>
+    {% else %}
+        {% if state.participant_count == 1 %}
+            <div class="nc-resv-toggle">
+                <button type="button" class="nc-resv-toggle__opt{% if state.is_exclusive %} nc-resv-toggle__opt--active{% endif %}"
+                        {% if not state.is_exclusive %}onclick="resvToggleRow('{% url 'modify_reservation' gift_id=item.gift.id %}', {{ item.gift.id }}, {{ item.group_id }}, {{ item.reservations.0.reserver.id }})"{% endif %}>
+                    <i class="bi bi-lock"></i> {% trans "Alone" %}
+                </button>
+                <button type="button" class="nc-resv-toggle__opt{% if not state.is_exclusive %} nc-resv-toggle__opt--active{% endif %}"
+                        {% if state.is_exclusive %}onclick="resvToggleRow('{% url 'modify_reservation' gift_id=item.gift.id %}', {{ item.gift.id }}, {{ item.group_id }}, {{ item.reservations.0.reserver.id }})"{% endif %}>
+                    <i class="bi bi-people"></i> {% trans "Shared" %}
+                </button>
+            </div>
+        {% endif %}
+
+        {% if state.can_join %}
+            <button type="button" class="nc-btn nc-btn--green nc-btn--sm"
+                    onclick="resvReserveRow('{% url 'reserve_gift' gift_id=item.gift.id %}', false, {{ item.gift.id }}, {{ item.current_user.id }}, {{ item.group_id }})">
+                <i class="bi bi-plus-lg"></i> {% trans "Participate" %}
+            </button>
+        {% endif %}
+        {% if state.is_mine %}
+            <button type="button" class="nc-btn nc-btn--ghost nc-btn--sm"
+                    onclick="resvLeaveRow('{% url 'delete_reservation' gift_id=item.gift.id %}', {{ item.gift.id }}, {{ item.group_id }}, {{ item.current_user.id }})">
+                {% trans "Withdraw" %}
+            </button>
+        {% endif %}
+        {% if item.other_non_participant and not state.is_exclusive %}
+            <div class="dropdown">
+                <button type="button" class="nc-btn nc-btn--ghost nc-btn--sm dropdown-toggle nc-resv-add-btn"
+                        data-bs-toggle="dropdown" data-bs-auto-close="outside" data-bs-boundary="viewport" aria-expanded="false">
+                    <i class="bi bi-person-plus"></i> {% trans "Add" %}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-4 p-2">
+                    <li class="dropdown-header small text-uppercase">{% trans "Choose a member" %}</li>
+                    {% for member in item.other_non_participant %}
+                        <li>
+                            <button type="button" class="dropdown-item rounded-3 d-flex align-items-center justify-content-between gap-3"
+                                    onclick="resvReserveRow('{% url 'reserve_gift' gift_id=item.gift.id %}', false, {{ item.gift.id }}, {{ member.id }}, {{ item.group_id }})">
+                                <span>{{ member.nickname }}</span>
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+    {% endif %}
+
+    {% if state.can_offer %}
+        <button class="nc-wish-offer-btn"
+                onclick="offerFromList('{% url 'offer_gift' gift_id=item.gift.id %}', {{ item.group_id }})">
+            <i class="bi bi-gift-fill"></i><span class="nc-btn-label">{% trans "Offered!" %}</span>
+        </button>
+    {% endif %}
+</div>
+{% endwith %}

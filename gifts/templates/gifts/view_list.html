@@ -35,6 +35,11 @@
                     <i class="bi {% if is_subscribed %}bi-bell-fill{% else %}bi-bell{% endif %}" style="font-size:14px"></i>
                 </button>
             {% endif %}
+            <a class="nc-btn nc-btn--outline nc-btn--sm"
+               href="{% url 'export_gift_list' user.id %}{% if from_group_id %}?from_group={{ from_group_id }}{% endif %}"
+               title="{% trans 'Export list as CSV' %}">
+                <i class="bi bi-download"></i> {% trans "Export" %}
+            </a>
             <button class="nc-btn nc-btn--primary nc-btn--sm"
                     data-bs-toggle="modal" data-bs-target="#addGiftModal">
                 <i class="bi bi-plus-lg"></i> {% trans "Add" %}
@@ -402,6 +407,41 @@
             }
         }
 
+        async function resvRowUpdate(url, body, giftId) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: JSON.stringify({...body, context: 'row'})
+            });
+            let data = null;
+            try { data = await response.json(); } catch (e) { /* ignore */ }
+            if (!response.ok || !data || !data.success) {
+                alert((data && data.error) || errMsg);
+                return;
+            }
+            const pillEl = document.getElementById(`wish-resv-pill-${giftId}`);
+            const actionsEl = document.getElementById(`wish-resv-actions-${giftId}`);
+            const stripEl = document.getElementById(`wish-resv-strip-${giftId}`);
+            if (pillEl) pillEl.innerHTML = data.pill_html;
+            if (actionsEl) {
+                actionsEl.innerHTML = data.actions_html;
+                if (typeof initFixedDropdowns === 'function') initFixedDropdowns(actionsEl);
+            }
+            if (stripEl) stripEl.innerHTML = data.strip_html;
+        }
+
+        async function resvReserveRow(url, isExclusive, giftId, userId, groupId) {
+            await resvRowUpdate(url, {exclusivity: isExclusive, user_id: userId, group_id: groupId}, giftId);
+        }
+
+        async function resvToggleRow(url, giftId, groupId, reservationUserIdToModify) {
+            await resvRowUpdate(url, {reservation_user_id_to_modify: reservationUserIdToModify, group_id: groupId}, giftId);
+        }
+
+        async function resvLeaveRow(url, giftId, groupId, reservationUserIdToDelete) {
+            await resvRowUpdate(url, {reservation_user_id_to_delete: reservationUserIdToDelete, group_id: groupId}, giftId);
+        }
+
         async function confirmMarkReceived(url, groupId) {
             const groupSelect = document.getElementById('markReceivedGroupSelect');
             if (groupSelect && groupSelect.value === '') {
@@ -426,8 +466,8 @@
 
     <script>
         /* Reinitialise dropdowns with fixed Popper strategy so they escape overflow containers */
-        document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('.nc-wish-more-btn[data-bs-toggle="dropdown"]').forEach(function (el) {
+        function initFixedDropdowns(root) {
+            (root || document).querySelectorAll('.nc-wish-more-btn[data-bs-toggle="dropdown"], .nc-resv-add-btn[data-bs-toggle="dropdown"]').forEach(function (el) {
                 const existing = bootstrap.Dropdown.getInstance(el);
                 if (existing) existing.dispose();
 
@@ -436,7 +476,8 @@
                 });
                 dropdown.update();
             });
-        });
+        }
+        document.addEventListener('DOMContentLoaded', function () { initFixedDropdowns(); });
     </script>
 
     {% include "gifts/includes/_gift_modals_logic.html" %}

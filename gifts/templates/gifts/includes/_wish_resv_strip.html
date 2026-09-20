@@ -1,0 +1,22 @@
+{% load i18n %}
+{% with state=item.reservation_state %}
+{% if state.is_reserved %}
+<div class="nc-resv-strip{% if not state.is_exclusive %} nc-resv-strip--open{% endif %}">
+    <span class="nc-resv-strip__label">
+        {% if state.is_exclusive %}{% trans "Reserved by" %}{% else %}{% trans "Co-reservers" %}{% endif %}
+    </span>
+    {% for reservation in item.reservations %}
+        <span class="nc-resv-chip{% if reservation.reserver_id == item.current_user.id %} nc-resv-chip--me{% endif %}">
+            <span class="nc-resv-chip__avatar">{{ reservation.reserver.nickname|first|upper }}</span>
+            <span class="nc-resv-chip__name">
+                {{ reservation.reserver.nickname|capfirst }}{% if reservation.reserver_id == item.current_user.id %} ({% trans "me" %}){% endif %}
+            </span>
+            <button type="button" class="nc-resv-chip__remove" title="{% trans 'Remove' %}"
+                    onclick="resvLeaveRow('{% url 'delete_reservation' gift_id=item.gift.id %}', {{ item.gift.id }}, {{ item.group_id }}, {{ reservation.reserver.id }})">
+                <i class="bi bi-x"></i>
+            </button>
+        </span>
+    {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
