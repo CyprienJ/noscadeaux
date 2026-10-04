@@ -764,7 +764,17 @@ body {
     gap: 22px;
     flex-wrap: wrap;
     color: white;
+    position: relative;
+    transition: box-shadow 0.16s;
 }
+.nc-hero:hover { box-shadow: 0 8px 22px oklch(18% 0.01 60 / 0.16); }
+.nc-hero:has(.nc-hero__link:focus-visible) { outline: 2px solid var(--nc-accent); outline-offset: 3px; }
+/* Stretched link: the title's ::after covers the whole card; inner controls sit above it */
+.nc-hero__link { display: block; color: white; text-decoration: none; }
+.nc-hero__link:hover, .nc-hero__link:focus { color: white; text-decoration: none; outline: none; }
+.nc-hero__link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.nc-hero .nc-btn,
+.nc-hero__stat { position: relative; z-index: 1; }
 .nc-hero__icon {
     width: 50px;
     height: 50px;
