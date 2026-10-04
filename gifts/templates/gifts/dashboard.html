@@ -48,7 +48,7 @@
         <div class="nc-hero">
             <div class="nc-hero__icon"><i class="bi bi-gift-fill"></i></div>
             <div class="nc-hero__body">
-                <div class="nc-hero__title">{% trans "My gift list" %}</div>
+                <a href="{% url 'view_list' request.user.id %}" class="nc-hero__title nc-hero__link">{% trans "My gift list" %}</a>
                 <div class="nc-hero__sub">
                     {% blocktrans count count=open_wish_count %}{{ count }} idea{% plural %}{{ count }} ideas{% endblocktrans %}
                     {% if user_groups %}
