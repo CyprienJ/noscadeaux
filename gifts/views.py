@@ -682,7 +682,7 @@ def view_list(request: HttpRequest, user_id: int):
         from itertools import groupby as _groupby
 
         event_qs = (
-            all_gifts_query.filter(event_list__isnull=False, is_draft=False)
+            all_gifts_query.filter(event_list__isnull=False, is_draft=False, is_surprise=False)
             .select_related("event_list")
             .order_by("event_list_id", "created_at")
         )

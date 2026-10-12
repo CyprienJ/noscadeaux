@@ -256,6 +256,12 @@
                 data-bs-toggle="modal" data-bs-target="#addGiftModal">
             <i class="bi bi-plus-lg"></i> {% trans "Add a wish" %}
         </button>
+        {% else %}
+        <button type="button" class="nc-btn nc-btn--ghost nc-btn--sm"
+                {% if has_identity %}onclick="openSurpriseModal()"{% else %}data-bs-toggle="modal" data-bs-target="#identityModal" data-pending-surprise{% endif %}
+                title="{% trans 'Suggest a gift the host won’t see' %}">
+            <i class="bi bi-stars"></i> {% trans "Add a surprise" %}
+        </button>
         {% endif %}
         </div>
     </div>
@@ -297,7 +303,7 @@
         {% with gift=item.gift my_res=item.my_reservation other_res=item.other_reservations %}
         <div class="nc-event-gift-row {% if gift.is_hidden %}nc-event-gift-row--hidden{% endif %}"
              id="gift-row-{{ gift.id }}"
-             data-status="{% if item.my_reservation %}mine{% elif item.has_exclusive_other %}exclusive{% elif item.other_reservations %}partial{% else %}free{% endif %}">
+             {% if not is_owner %}data-status="{% if item.my_reservation %}mine{% elif item.has_exclusive_other %}exclusive{% elif item.other_reservations %}partial{% else %}free{% endif %}"{% endif %}>
             <div class="nc-event-gift-icon">
                 <i class="bi bi-gift nc-event-gift-icon-color"></i>
             </div>
@@ -319,6 +325,12 @@
                         </a>
                     {% endif %}
                     {% if not is_owner %}
+                        {% if gift.is_surprise %}
+                            <span class="nc-event-surprise-badge">
+                                <i class="bi bi-stars"></i>
+                                {% if item.is_my_surprise %}{% trans "Your surprise" %}{% else %}{% blocktrans with name=gift.guest_author_name %}Surprise from {{ name }}{% endblocktrans %}{% endif %}
+                            </span>
+                        {% endif %}
                         {% for r in other_res %}
                             {% if r.exclusivity %}
                                 <span class="nc-event-reserved-by nc-event-reserved-by--excl">
@@ -366,6 +378,13 @@
                     </button>
 
                 {% else %}
+                    {% if item.is_my_surprise %}
+                        <button type="button" class="nc-event-icon-btn"
+                                title="{% trans 'Edit' %}"
+                                onclick="openSurpriseModal({{ gift.id }}, '{{ gift.title|escapejs }}', '{{ gift.description|escapejs }}', '{{ gift.url|escapejs }}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    {% endif %}
                     {% if my_res %}
                         <button type="button" class="nc-event-reserve-btn nc-event-reserve-btn--mine"
                                 onclick="cancelReserve({{ gift.id }}, this)"
@@ -710,6 +729,55 @@
 </div>
 {% endif %}{# is_owner #}
 
+{% if not is_owner %}
+<!-- ── SURPRISE MODAL (visitors add / edit) ───────────────────────────────── -->
+<div class="modal fade" id="surpriseModal" tabindex="-1" aria-labelledby="surpriseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0 rounded-4">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="surpriseModalLabel"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">
+                    <i class="bi bi-eye-slash"></i>
+                    {% blocktrans with name=event.owner.nickname %}{{ name }} won't see this gift. Other guests will, so they can join in.{% endblocktrans %}
+                </p>
+                <input type="hidden" id="surpriseId">
+                <div class="mb-3">
+                    <label for="surpriseTitle" class="form-label">{% trans "Name" %} <span class="text-danger">*</span></label>
+                    <input type="text" id="surpriseTitle" class="form-control"
+                           placeholder="{% trans 'What is it?' %}" maxlength="200" required>
+                </div>
+                <div class="mb-3">
+                    <label for="surpriseDesc" class="form-label">{% trans "Details" %}</label>
+                    <textarea id="surpriseDesc" class="form-control" rows="2"
+                              placeholder="{% trans 'Size, color, details…' %}"></textarea>
+                </div>
+                <div class="mb-1">
+                    <label for="surpriseUrl" class="form-label">{% trans "Link" %}</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
+                        <input type="url" id="surpriseUrl" class="form-control" placeholder="https://…">
+                    </div>
+                </div>
+                <div id="surpriseError" class="text-danger small d-none mt-2"></div>
+            </div>
+            <div class="modal-footer border-0 pt-0 justify-content-between">
+                <button type="button" class="nc-btn nc-btn--ghost text-danger d-none" id="deleteSurpriseBtn"
+                        onclick="deleteSurprise()">
+                    <i class="bi bi-trash3"></i> {% trans "Delete" %}
+                </button>
+                <div class="d-flex gap-2 ms-auto">
+                    <button type="button" class="nc-btn nc-btn--ghost" data-bs-dismiss="modal">{% trans "Cancel" %}</button>
+                    <button type="button" class="nc-btn nc-btn--primary" onclick="submitSurprise()">{% trans "Save" %}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- ── RESERVE MODAL (exclusivity choice) ────────────────────────────────── -->
 <div class="modal fade" id="reserveModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-sm">
@@ -749,10 +817,14 @@ const URL_RESERVE  = "{% url 'reserve_event_gift'        token=event.access_toke
 const URL_EDIT     = "{% url 'edit_event_gift'           token=event.access_token gift_id=0 %}";
 const URL_HIDE     = "{% url 'toggle_event_gift_hidden'  token=event.access_token gift_id=0 %}";
 const URL_DELETE   = "{% url 'delete_event_gift'         token=event.access_token gift_id=0 %}";
+const URL_ADD_SURPRISE    = "{% url 'add_event_surprise'    token=event.access_token %}";
+const URL_EDIT_SURPRISE   = "{% url 'edit_event_surprise'   token=event.access_token gift_id=0 %}";
+const URL_DELETE_SURPRISE = "{% url 'delete_event_surprise' token=event.access_token gift_id=0 %}";
 
 function giftUrl(template, id) { return template.replace('/0/', `/${id}/`); }
 
 let pendingGiftId = null;
+let pendingSurprise = false;
 
 function selectParticipant(name) {
     document.getElementById("guestNameInput").value = name;
@@ -777,7 +849,10 @@ function submitIdentity() {
         if (data.success) {
             const modal = bootstrap.Modal.getInstance(document.getElementById("identityModal"));
             if (modal) modal.hide();
-            if (pendingGiftId) {
+            if (pendingSurprise) {
+                pendingSurprise = false;
+                setTimeout(() => openSurpriseModal(), 300);
+            } else if (pendingGiftId) {
                 const gid = pendingGiftId;
                 pendingGiftId = null;
                 const btn = document.querySelector(`[data-gift-id="${gid}"]`);
@@ -791,8 +866,67 @@ function submitIdentity() {
 }
 
 document.querySelectorAll("[data-pending-gift]").forEach(btn => {
-    btn.addEventListener("click", () => { pendingGiftId = btn.dataset.pendingGift; });
+    btn.addEventListener("click", () => { pendingGiftId = btn.dataset.pendingGift; pendingSurprise = false; });
 });
+document.querySelectorAll("[data-pending-surprise]").forEach(btn => {
+    btn.addEventListener("click", () => { pendingSurprise = true; pendingGiftId = null; });
+});
+
+function openSurpriseModal(id, title, desc, url) {
+    const editing = Boolean(id);
+    document.getElementById("surpriseId").value = id || "";
+    document.getElementById("surpriseTitle").value = title || "";
+    document.getElementById("surpriseDesc").value = desc || "";
+    document.getElementById("surpriseUrl").value = url || "";
+    document.getElementById("surpriseModalLabel").textContent = editing
+        ? "{% trans 'Edit surprise' %}" : "{% trans 'New surprise' %}";
+    document.getElementById("deleteSurpriseBtn").classList.toggle("d-none", !editing);
+    document.getElementById("surpriseError").classList.add("d-none");
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("surpriseModal")).show();
+}
+
+function showSurpriseError(message) {
+    const errEl = document.getElementById("surpriseError");
+    errEl.textContent = message;
+    errEl.classList.remove("d-none");
+}
+
+function submitSurprise() {
+    const id = document.getElementById("surpriseId").value;
+    const title = document.getElementById("surpriseTitle").value.trim();
+    if (!title) {
+        showSurpriseError("{% trans 'Name is required.' %}");
+        return;
+    }
+    fetch(id ? giftUrl(URL_EDIT_SURPRISE, id) : URL_ADD_SURPRISE, {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-CSRFToken": CSRF_TOKEN},
+        body: JSON.stringify({
+            title,
+            description: document.getElementById("surpriseDesc").value.trim(),
+            url: document.getElementById("surpriseUrl").value.trim(),
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) location.reload();
+        else showSurpriseError(data.error || "Error");
+    });
+}
+
+function deleteSurprise() {
+    const id = document.getElementById("surpriseId").value;
+    if (!id || !confirm("{% trans 'Delete this surprise?' %}")) return;
+    fetch(giftUrl(URL_DELETE_SURPRISE, id), {
+        method: "POST",
+        headers: {"X-CSRFToken": CSRF_TOKEN},
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) location.reload();
+        else showSurpriseError(data.error || "Error");
+    });
+}
 
 let reserveGiftId = null;
 

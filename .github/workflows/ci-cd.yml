@@ -9,6 +9,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # Match the production image (Dockerfile); otherwise uv picks the newest Python, which may lack wheels.
+  UV_PYTHON: "3.12"
 
 jobs:
 
@@ -66,7 +68,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
       - name: Set up Python
-        run: uv python install
+        run: uv python install 3.12
       - name: Install dependencies
         run: uv sync --all-extras --dev --frozen --no-build
       - name: Run linter
@@ -84,7 +86,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
       - name: Set up Python
-        run: uv python install
+        run: uv python install 3.12
       - name: Install dependencies
         run: uv sync --all-extras --dev --frozen --no-build
       - name: Run Tests

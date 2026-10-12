@@ -172,6 +172,13 @@ urlpatterns = [
     ),
     path("event/<str:token>/gift/<int:gift_id>/reserve/", events.reserve_event_gift, name="reserve_event_gift"),
     path("event/<str:token>/gift/<int:gift_id>/transfer/", events.transfer_event_gift, name="transfer_event_gift"),
+    path("event/<str:token>/surprise/add/", events.add_event_surprise, name="add_event_surprise"),
+    path("event/<str:token>/surprise/<int:gift_id>/edit/", events.edit_event_surprise, name="edit_event_surprise"),
+    path(
+        "event/<str:token>/surprise/<int:gift_id>/delete/",
+        events.delete_event_surprise,
+        name="delete_event_surprise",
+    ),
     path("event/<str:token>/edit-info/", events.edit_event_info, name="edit_event_info"),
     path(
         "event/<str:token>/secret-santa/exclusion/add/",

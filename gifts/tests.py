@@ -2179,6 +2179,136 @@ class EventDetailViewTest(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class EventReservationPrivacyTest(TestCase):
+    def setUp(self):
+        self.user1, self.user2, self.user3 = create_users()
+        self.event = EventList.objects.create(name="Party", owner=self.user1)
+        self.gift = Gift.objects.create(owner=self.user1, created_by=self.user1, title="Lamp", event_list=self.event)
+        GuestReservation.objects.create(
+            gift=self.gift, reserver_user=self.user2, reserver_name="Secret Reserver", exclusivity=True
+        )
+
+    def _url(self):
+        return reverse("event_detail", kwargs={"token": self.event.access_token})
+
+    def test_owner_page_does_not_expose_reservations(self):
+        self.client.force_login(self.user1)
+        response = self.client.get(self._url())
+        self.assertNotContains(response, "Secret Reserver")
+        self.assertNotContains(response, "data-status=")
+        self.assertEqual(response.context["reserved_count"], 0)
+        self.assertEqual(response.context["participants"], [])
+        self.assertEqual(response.context["gifts_list"][0]["other_reservations"], [])
+
+    def test_visitor_still_sees_reservations(self):
+        self.client.force_login(self.user3)
+        response = self.client.get(self._url())
+        self.assertContains(response, "Secret Reserver")
+        self.assertContains(response, 'data-status="exclusive"')
+
+
+class EventSurpriseTest(TestCase):
+    def setUp(self):
+        self.user1, self.user2, self.user3 = create_users()
+        self.event = EventList.objects.create(name="Party", owner=self.user1)
+        self.wish = Gift.objects.create(owner=self.user1, created_by=self.user1, title="Lamp", event_list=self.event)
+
+    def _url(self, name, **kwargs):
+        return reverse(name, kwargs={"token": self.event.access_token, **kwargs})
+
+    def _post_json(self, url, data=None):
+        return self.client.post(url, data=json.dumps(data or {}), content_type="application/json")
+
+    def _add_surprise(self, title="Bike"):
+        response = self._post_json(self._url("add_event_surprise"), {"title": title, "url": "https://example.com"})
+        self.assertEqual(response.status_code, 200)
+        return Gift.objects.get(id=response.json()["gift_id"])
+
+    def test_logged_in_visitor_adds_surprise(self):
+        self.client.force_login(self.user2)
+        surprise = self._add_surprise()
+        self.assertTrue(surprise.is_surprise)
+        self.assertEqual(surprise.owner, self.user1)
+        self.assertEqual(surprise.created_by, self.user2)
+        self.assertEqual(surprise.event_list, self.event)
+        self.assertEqual(surprise.guest_author_name, "User2")
+
+    def test_anonymous_guest_needs_identity(self):
+        response = self._post_json(self._url("add_event_surprise"), {"title": "Bike"})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Gift.objects.filter(is_surprise=True).exists())
+
+    def test_anonymous_guest_adds_surprise(self):
+        self._post_json(self._url("event_set_guest"), {"name": "Aunt May"})
+        surprise = self._add_surprise()
+        self.assertEqual(surprise.guest_author_name, "Aunt May")
+        self.assertTrue(surprise.guest_author_session_key)
+
+    def test_owner_cannot_add_surprise(self):
+        self.client.force_login(self.user1)
+        response = self._post_json(self._url("add_event_surprise"), {"title": "Bike"})
+        self.assertEqual(response.status_code, 403)
+
+    def test_javascript_link_rejected(self):
+        self.client.force_login(self.user2)
+        response = self._post_json(self._url("add_event_surprise"), {"title": "Bike", "url": "javascript:alert(1)"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_owner_never_sees_surprise(self):
+        self.client.force_login(self.user2)
+        self._add_surprise("Secret bike")
+        self.client.force_login(self.user1)
+        response = self.client.get(self._url("event_detail"))
+        self.assertNotContains(response, "Secret bike")
+        self.assertEqual([item["gift"] for item in response.context["gifts_list"]], [self.wish])
+        response = self.client.get(reverse("view_list", kwargs={"user_id": self.user1.id}))
+        self.assertNotContains(response, "Secret bike")
+
+    def test_owner_endpoints_404_on_surprise(self):
+        self.client.force_login(self.user2)
+        surprise = self._add_surprise()
+        self.client.force_login(self.user1)
+        for name in ("edit_event_gift", "toggle_event_gift_hidden", "transfer_event_gift", "delete_event_gift"):
+            response = self._post_json(self._url(name, gift_id=surprise.id), {"title": "Peek"})
+            self.assertEqual(response.status_code, 404, name)
+        self.assertTrue(Gift.objects.filter(id=surprise.id, title="Bike").exists())
+
+    def test_other_visitors_see_and_reserve_surprise(self):
+        self.client.force_login(self.user2)
+        surprise = self._add_surprise("Secret bike")
+        self.client.force_login(self.user3)
+        response = self.client.get(self._url("event_detail"))
+        self.assertContains(response, "Secret bike")
+        self.assertContains(response, "nc-event-surprise-badge")
+        self.assertContains(response, "User2")
+        response = self._post_json(self._url("reserve_event_gift", gift_id=surprise.id))
+        self.assertTrue(response.json()["reserved"])
+
+    def test_only_author_can_edit_or_delete(self):
+        self.client.force_login(self.user2)
+        surprise = self._add_surprise()
+        self.client.force_login(self.user3)
+        response = self._post_json(self._url("edit_event_surprise", gift_id=surprise.id), {"title": "Hacked"})
+        self.assertEqual(response.status_code, 403)
+        response = self._post_json(self._url("delete_event_surprise", gift_id=surprise.id))
+        self.assertEqual(response.status_code, 403)
+
+        self.client.force_login(self.user2)
+        response = self._post_json(self._url("edit_event_surprise", gift_id=surprise.id), {"title": "Tandem"})
+        self.assertEqual(response.status_code, 200)
+        surprise.refresh_from_db()
+        self.assertEqual(surprise.title, "Tandem")
+        response = self._post_json(self._url("delete_event_surprise", gift_id=surprise.id))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Gift.objects.filter(id=surprise.id).exists())
+
+    def test_anonymous_author_can_edit_own_surprise(self):
+        self._post_json(self._url("event_set_guest"), {"name": "Aunt May"})
+        surprise = self._add_surprise()
+        response = self._post_json(self._url("edit_event_surprise", gift_id=surprise.id), {"title": "Tandem"})
+        self.assertEqual(response.status_code, 200)
+
+
 class SecretSantaEventTest(TestCase):
     def setUp(self):
         self.user1, self.user2, self.user3 = create_users()

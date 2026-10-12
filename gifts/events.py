@@ -56,6 +56,35 @@ def _get_guest_identity(request):
     return None, name, sk
 
 
+def _is_surprise_author(gift, reserver_user, session_key):
+    if not gift.is_surprise:
+        return False
+    if reserver_user:
+        return gift.created_by_id == reserver_user.id and not gift.guest_author_session_key
+    return bool(session_key) and gift.guest_author_session_key == session_key
+
+
+def _parse_gift_payload(data):
+    """Return (fields, error_response) from a JSON gift payload (title, description, url, price)."""
+    title = (data.get("title") or "").strip()[:200]
+    if not title:
+        return None, JsonResponse({"success": False, "error": _("Title required")}, status=400)
+    price = None
+    price_str = (data.get("price") or "").strip().replace(",", ".")
+    if price_str:
+        with contextlib.suppress(InvalidOperation):
+            price = Decimal(price_str)
+    url = (data.get("url") or "").strip()[:1000]
+    if url and not url.lower().startswith(("http://", "https://")):
+        return None, JsonResponse({"success": False, "error": _("Invalid link")}, status=400)
+    return {
+        "title": title,
+        "description": (data.get("description") or "").strip(),
+        "url": url,
+        "price": price,
+    }, None
+
+
 def _parse_money(value):
     value = (value or "").strip().replace(",", ".")
     if not value:
@@ -154,40 +183,45 @@ def event_detail(request, token):
     reserver_user, guest_name, session_key = _get_guest_identity(request)
     has_identity = bool(reserver_user or guest_name)
 
-    # All gifts for owner, only visible ones for visitors
-    gifts_qs = event.gifts.order_by("created_at")
-    if not is_owner:
-        gifts_qs = gifts_qs.filter(is_hidden=False)
+    # Owner: all their own wishes, but never surprises. Visitors: visible wishes and all surprises.
+    gifts_qs = event.gifts.filter(is_surprise=False) if is_owner else event.gifts.filter(is_hidden=False)
+    gifts_qs = gifts_qs.order_by("created_at")
 
-    # Annotate each gift with reservation state
+    # Annotate each gift with reservation state. Reservations are never loaded for the
+    # owner so nothing about them can leak into the page.
     gifts_list = []
     for gift in gifts_qs:
-        reservations = list(gift.guest_reservations.select_related("reserver_user").all())
         my_res = None
-        if reserver_user:
-            my_res = next((r for r in reservations if r.reserver_user_id == reserver_user.id), None)
-        elif session_key:
-            my_res = next((r for r in reservations if r.session_key == session_key), None)
-        other_res = [r for r in reservations if r != my_res]
+        other_res = []
+        if not is_owner:
+            reservations = list(gift.guest_reservations.select_related("reserver_user").all())
+            if reserver_user:
+                my_res = next((r for r in reservations if r.reserver_user_id == reserver_user.id), None)
+            elif session_key:
+                my_res = next((r for r in reservations if r.session_key == session_key), None)
+            other_res = [r for r in reservations if r != my_res]
         gifts_list.append(
             {
                 "gift": gift,
                 "my_reservation": my_res,
                 "other_reservations": other_res,
                 "has_exclusive_other": any(r.exclusivity for r in other_res),
+                "is_my_surprise": not is_owner and _is_surprise_author(gift, reserver_user, session_key),
             }
         )
 
     # Existing participant names (for identity modal "pick from list")
-    participants = (
-        GuestReservation.objects.filter(gift__event_list=event)
-        .exclude(reserver_name="")
-        .values_list("reserver_name", flat=True)
-        .distinct()
-        .order_by("reserver_name")
-    )
-    if reserver_user:
-        participants = [p for p in participants if p != reserver_user.nickname]
+    participants = []
+    if not is_owner:
+        participants = (
+            GuestReservation.objects.filter(gift__event_list=event)
+            .exclude(reserver_name="")
+            .values_list("reserver_name", flat=True)
+            .distinct()
+            .order_by("reserver_name")
+        )
+        if reserver_user:
+            participants = [p for p in participants if p != reserver_user.nickname]
 
     # Track authenticated visitors so the list appears on their dashboard
     if request.user.is_authenticated and not is_owner:
@@ -229,7 +263,7 @@ def event_detail(request, token):
             "reserver_user": reserver_user,
             "participants": list(participants),
             "total_gifts": len(gifts_list),
-            "hidden_count": event.gifts.filter(is_hidden=True).count() if is_owner else 0,
+            "hidden_count": event.gifts.filter(is_hidden=True, is_surprise=False).count() if is_owner else 0,
             "reserved_count": sum(1 for g in gifts_list if g["my_reservation"] or g["other_reservations"]),
             "has_my_reservations": any(g["my_reservation"] for g in gifts_list),
             "secret_santa_participants": secret_santa_participants,
@@ -264,6 +298,11 @@ def set_guest_name(request, token):
         reserver_name__iexact=name,
         reserver_user=None,
     ).exclude(session_key=session_key).update(session_key=session_key)
+    Gift.objects.filter(
+        event_list=event,
+        is_surprise=True,
+        guest_author_name__iexact=name,
+    ).exclude(guest_author_session_key="").update(guest_author_session_key=session_key)
     return JsonResponse({"success": True, "name": name})
 
 
@@ -304,6 +343,95 @@ def reserve_event_gift(request, token, gift_id):
             exclusivity=exclusivity,
         )
         return JsonResponse({"success": True, "reserved": True, "reserver_name": reserver_name})
+
+
+# ── Visitor surprises ────────────────────────────────────────────────────────
+
+
+def _get_visitor_identity_or_error(request, event):
+    """Return (reserver_user, name, session_key, error_response) for a visitor allowed to add surprises."""
+    if request.user.is_authenticated and request.user == event.owner:
+        return (
+            None,
+            "",
+            "",
+            JsonResponse({"success": False, "error": _("You can't add a surprise to your own list")}, status=403),
+        )
+    reserver_user, name, session_key = _get_guest_identity(request)
+    if not reserver_user and not name:
+        return None, "", "", JsonResponse({"success": False, "error": _("Identity required")}, status=400)
+    if not reserver_user and not session_key:
+        request.session.create()
+        session_key = request.session.session_key
+    return reserver_user, name, session_key, None
+
+
+@require_POST
+def add_event_surprise(request, token):
+    event = _get_event_or_404(token)
+    err = _check_event_demo_scope(request, event)
+    if err:
+        return err
+    reserver_user, name, session_key, err = _get_visitor_identity_or_error(request, event)
+    if err:
+        return err
+    data, err = _parse_json_body(request)
+    if err:
+        return err
+    fields, err = _parse_gift_payload(data)
+    if err:
+        return err
+
+    gift = Gift.objects.create(
+        owner=event.owner,
+        created_by=reserver_user or event.owner,
+        event_list=event,
+        is_surprise=True,
+        guest_author_name=name,
+        guest_author_session_key="" if reserver_user else session_key,
+        **fields,
+    )
+    return JsonResponse({"success": True, "gift_id": gift.id})
+
+
+def _get_own_surprise_or_error(request, token, gift_id):
+    event = _get_event_or_404(token)
+    err = _check_event_demo_scope(request, event)
+    if err:
+        return None, err
+    reserver_user, _name, session_key, err = _get_visitor_identity_or_error(request, event)
+    if err:
+        return None, err
+    gift = get_object_or_404(Gift, id=gift_id, event_list=event, is_surprise=True)
+    if not _is_surprise_author(gift, reserver_user, session_key):
+        return None, JsonResponse({"success": False, "error": _("You don't have permission to do this")}, status=403)
+    return gift, None
+
+
+@require_POST
+def edit_event_surprise(request, token, gift_id):
+    gift, err = _get_own_surprise_or_error(request, token, gift_id)
+    if err:
+        return err
+    data, err = _parse_json_body(request)
+    if err:
+        return err
+    fields, err = _parse_gift_payload(data)
+    if err:
+        return err
+    for key, value in fields.items():
+        setattr(gift, key, value)
+    gift.save()
+    return JsonResponse({"success": True})
+
+
+@require_POST
+def delete_event_surprise(request, token, gift_id):
+    gift, err = _get_own_surprise_or_error(request, token, gift_id)
+    if err:
+        return err
+    gift.delete()
+    return JsonResponse({"success": True})
 
 
 # ── Owner-only views ─────────────────────────────────────────────────────────
@@ -385,7 +513,7 @@ def edit_event_gift(request, token, gift_id):
     err = _check_owner(request, event)
     if err:
         return err
-    gift = get_object_or_404(Gift, id=gift_id, event_list=event)
+    gift = get_object_or_404(Gift, id=gift_id, event_list=event, is_surprise=False)
     data, parse_err = _parse_json_body(request)
     if parse_err:
         return parse_err
@@ -415,7 +543,7 @@ def delete_event_gift(request, token, gift_id):
     err = _check_owner(request, event)
     if err:
         return err
-    gift = get_object_or_404(Gift, id=gift_id, event_list=event)
+    gift = get_object_or_404(Gift, id=gift_id, event_list=event, is_surprise=False)
     gift.delete()
     return redirect("event_detail", token=token)
 
@@ -427,7 +555,7 @@ def toggle_event_gift_hidden(request, token, gift_id):
     err = _check_owner(request, event)
     if err:
         return err
-    gift = get_object_or_404(Gift, id=gift_id, event_list=event)
+    gift = get_object_or_404(Gift, id=gift_id, event_list=event, is_surprise=False)
     gift.is_hidden = not gift.is_hidden
     gift.save()
     return JsonResponse({"success": True, "hidden": gift.is_hidden})
@@ -441,7 +569,7 @@ def transfer_event_gift(request, token, gift_id):
     err = _check_owner(request, event)
     if err:
         return err
-    gift = get_object_or_404(Gift, id=gift_id, event_list=event)
+    gift = get_object_or_404(Gift, id=gift_id, event_list=event, is_surprise=False)
     gift.guest_reservations.all().delete()
     gift.event_list = None
     gift.save()
