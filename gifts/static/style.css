@@ -2780,6 +2780,7 @@ body {
 .nc-event-reserved-by--excl { color: var(--nc-accent); }
 .nc-event-reserved-by--participating { color: var(--nc-sage); }
 .nc-event-reserved-by--mine { color: var(--nc-sage); font-weight: 600; }
+.nc-event-surprise-badge { font-size: 11px; color: var(--nc-accent); font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
 
 /* ── Reserve exclusivity modal ───────────────────────────────── */
 /* (uses existing nc-btn styles — no extra CSS needed) */

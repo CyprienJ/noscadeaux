@@ -414,6 +414,10 @@ class Gift(models.Model):
     )
     is_hidden = models.BooleanField(default=False)
     is_draft = models.BooleanField(default=False)
+    # Event-list surprises are added by visitors (possibly anonymous guests) and never shown to the owner.
+    is_surprise = models.BooleanField(default=False)
+    guest_author_name = models.CharField(max_length=100, blank=True)
+    guest_author_session_key = models.CharField(max_length=40, blank=True)
 
     def __str__(self):
         return f"{self.title} ({self.owner.nickname})"
