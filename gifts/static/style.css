@@ -2206,6 +2206,16 @@ body {
 
 .nc-wish-item { background: var(--nc-white); }
 
+/* Keep user-provided text inside the gift details dialog. */
+.nc-gift-details .modal-body { overflow-wrap: anywhere; }
+.nc-gift-details__heading { min-width: 0; }
+.nc-gift-details .nc-gift-tag,
+.nc-gift-details .nc-wish-status { max-width: 100%; white-space: normal; }
+.nc-gift-details .nc-wish-status__count { flex-shrink: 0; }
+.nc-gift-details .nc-reservation-person { flex-wrap: wrap; }
+.nc-gift-details .nc-reservation-person__name { flex: 1 1 180px; min-width: 0; }
+.nc-gift-details .nc-reservation-person__actions { margin-left: auto; }
+
 .nc-btn--green {
     background: var(--nc-sage); color: #fff; border: 1px solid transparent;
 }
@@ -2468,12 +2478,37 @@ body {
 @media (max-width: 640px) {
     .nc-list-page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
     .nc-list-page-title { font-size: 20px; }
-    .nc-wish-name-col { flex: 0 0 140px; }
-    .nc-wish-meta { display: none; }
-    .nc-wish-offer-btn { padding: 8px 12px; }
-    .nc-wish-offer-btn .nc-btn-label { display: none; }
     .nc-invitation-card { padding: 32px 24px 24px; }
     .nc-invitation-members-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Stack gift information and controls on phones and narrow tablets. */
+@media (max-width: 991.98px) {
+    .nc-wish-row {
+        display: grid; grid-template-columns: 40px minmax(0, 1fr);
+        gap: 10px 12px; padding: 14px;
+    }
+    .nc-wish-name-col { min-width: 0; }
+    .nc-wish-name { white-space: normal; overflow-wrap: anywhere; }
+    .nc-wish-meta,
+    .nc-wish-actions { grid-column: 1 / -1; }
+    .nc-wish-meta-chip,
+    .nc-wish-meta .nc-gift-tag,
+    .nc-wish-meta .nc-wish-status {
+        max-width: 100%; white-space: normal; overflow-wrap: anywhere;
+    }
+    .nc-wish-meta > span { min-width: 0; max-width: 100%; }
+    .nc-wish-actions { flex-wrap: wrap; min-width: 0; }
+    .nc-wish-actions > span { flex: 1 1 180px; min-width: 0; max-width: 100%; }
+    .nc-wish-actions > .dropdown { margin-left: auto; }
+    .nc-wish-actions .nc-resv-actions { justify-content: flex-start; }
+    .nc-wish-actions .nc-btn,
+    .nc-wish-reserve-btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+    .nc-resv-strip { padding: 9px 14px 11px; }
+    .nc-resv-chip { min-width: 0; max-width: 100%; }
+    .nc-resv-chip__name { min-width: 0; overflow-wrap: anywhere; }
+    .nc-resv-chip__remove { flex-shrink: 0; }
+    .nc-wish-offer-btn { padding: 8px 12px; }
 }
 
 /* ══════════════════════════════════════════════════════════════
