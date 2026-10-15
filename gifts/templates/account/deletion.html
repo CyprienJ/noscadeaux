@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}nosCadeaux — {% trans "Account deletion" %}{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width: 820px">
+    <article class="auth-card rounded-5 shadow-lg p-4 p-md-5">
+        <h1 class="h2">nosCadeaux — {% trans "Account deletion" %}</h1>
+        <p>{% trans "When you delete your account, the data attached to that account is deleted immediately from nosCadeaux, including your profile, gifts, reservations, subscriptions, extension tokens, and event lists you own." %}</p>
+        <p>{% trans "If you belonged to shared groups, those groups may continue to exist for the remaining members, but your account is removed from them." %}</p>
+        <p>{% trans "For any privacy question or deletion request, you can contact me by email at" %}
+            <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+        {% if user.is_authenticated %}
+            <h2 class="h4 text-danger">{% trans "Are you absolutely sure?" %}</h2>
+            <p>{% trans "Once you delete your account, there is no going back. Please be certain." %}</p>
+            <form action="{% url 'delete_account' %}" method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">{% trans "Confirm Delete" %}</button>
+            </form>
+        {% else %}
+            <a class="nc-btn nc-btn--primary" href="{% url 'login' %}?next={{ request.path|urlencode }}">{% trans "Log in" %}</a>
+        {% endif %}
+    </article>
+</div>
+{% endblock %}

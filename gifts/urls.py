@@ -3,13 +3,14 @@ from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
-from . import account, bug_reports, events, groups, shared_lists, views
+from . import account, bug_reports, events, groups, pwa, shared_lists, views
 from .feeds import SubscriptionFeed
 
 urlpatterns = [
     # Default
     path("", views.welcome, name="welcome"),
     path("privacy/", views.privacy, name="privacy"),
+    path("account-deletion/", pwa.account_deletion, name="account_deletion"),
     path("changelog/", views.changelog, name="changelog"),
     path("release-notes/unseen/", views.unseen_release_notes, name="unseen_release_notes"),
     path("bug-report/", bug_reports.bug_report, name="bug_report"),

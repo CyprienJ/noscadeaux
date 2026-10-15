@@ -10,6 +10,8 @@
     <title>{% block title %}Nos cadeaux{% endblock %}</title>
 
     <link rel="icon" href="{% static 'gifts/favicon.ico' %}" type="image/x-icon">
+    <link rel="manifest" href="{% url 'pwa_manifest' %}">
+    <meta name="theme-color" content="#e11d48">
 
     <script>
         (function () {
@@ -264,6 +266,7 @@
 </script>
 
 <script src="{% static 'gifts/empty_list.js' %}"></script>
+<script src="{% static 'gifts/pwa/register.js' %}"></script>
 {% block extra_js %}{% endblock %}
 {% block extra_body %}{% endblock %}
 

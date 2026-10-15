@@ -40,6 +40,7 @@ jobs:
             TURNSTILE_SITE_KEY=${{ vars.TURNSTILE_SITE_KEY }}
             TURNSTILE_SECRET_KEY=${{ secrets.TURNSTILE_SECRET_KEY }}
             PUBLIC_BASE_URL=${{ vars.PUBLIC_BASE_URL || 'https://noscadeaux.fr' }}
+            TWA_SHA256_FINGERPRINTS=${{ vars.TWA_SHA256_FINGERPRINTS }}
             NPM_NETWORK=${{ vars.NPM_NETWORK || 'proxy' }}
             DEV=False
             EOF
