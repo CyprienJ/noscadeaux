@@ -41,6 +41,15 @@ DEBUG = os.environ.get("DEV", "False") == "True"
 ALLOWED_HOSTS = ["noscadeaux.fr", "www.noscadeaux.fr", "127.0.0.1", "localhost"]
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://noscadeaux.fr")
 
+# Public Android application ID. Certificate fingerprints come from Play Console;
+# no association is published until at least one fingerprint is configured.
+TWA_PACKAGE_NAME = "com.cyprienj.noscadeaux"
+TWA_SHA256_FINGERPRINTS = [
+    fingerprint.strip()
+    for fingerprint in os.environ.get("TWA_SHA256_FINGERPRINTS", "").split(",")
+    if fingerprint.strip()
+]
+
 # Public bug reports are sent directly to GitHub. No report is stored by Django.
 BUG_REPORT_REPOSITORY = os.environ.get("BUG_REPORT_REPOSITORY", "")
 BUG_REPORT_TOKEN = os.environ.get("BUG_REPORT_TOKEN", "")

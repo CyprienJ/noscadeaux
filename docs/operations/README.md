@@ -80,5 +80,6 @@ for command semantics and common failure paths.
 ## Deeper references
 
 - [Configuration](configuration.md): environment and fixed Django settings.
+- [Android TWA](android-twa.md): web resources, Android association and publication checks.
 - [Maintenance](maintenance.md): scheduled commands, retention, diagnosis.
 - [Onboarding migration](onboarding-migration.md): audit, rehearsal, rollback constraints.
