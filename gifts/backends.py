@@ -3,10 +3,10 @@ from django.contrib.auth.backends import ModelBackend
 
 
 class CaseInsensitiveModelBackend(ModelBackend):
-    def authenticate(self, request, email=None, password=None, **kwargs):
+    # LoginView/AuthenticationForm pass the identifier as `username`.
+    def authenticate(self, request, username=None, password=None, **kwargs):
         user_model = get_user_model()
-        if email is None:
-            email = kwargs.get(user_model.USERNAME_FIELD)
+        email = username if username is not None else kwargs.get(user_model.USERNAME_FIELD)
         try:
             user = user_model.objects.get(**{f"{user_model.USERNAME_FIELD}__iexact": email})
         except user_model.DoesNotExist:
