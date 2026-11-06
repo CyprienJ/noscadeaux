@@ -2790,3 +2790,18 @@ class PublicDemoTest(TestCase):
         self.assertEqual(response.status_code, 403)
         demo_user.refresh_from_db()
         self.assertEqual(demo_user.email, DEMO_EMAIL)
+
+
+class CaseInsensitiveLoginTest(TestCase):
+    def test_login_form_ignores_email_case(self):
+        User.objects.create_user(
+            username="casetest@example.com",
+            email="casetest@example.com",
+            password="pw-12345-secret",
+            is_verified=True,
+            onboarding_version=CURRENT_ONBOARDING_VERSION,
+        )
+        response = self.client.post(
+            reverse("login"), {"username": "CaseTest@Example.COM", "password": "pw-12345-secret"}
+        )
+        self.assertIn("_auth_user_id", self.client.session, response.content[:500])
