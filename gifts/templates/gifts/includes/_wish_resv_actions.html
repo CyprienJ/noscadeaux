@@ -65,7 +65,7 @@
     {% if state.can_offer %}
         <button class="nc-wish-offer-btn"
                 onclick="offerFromList('{% url 'offer_gift' gift_id=item.gift.id %}', {{ item.group_id }})">
-            <i class="bi bi-gift-fill"></i><span class="nc-btn-label">{% trans "Offered!" %}</span>
+            <i class="bi bi-gift-fill"></i><span class="nc-btn-label">{% trans "Mark as offered" %}</span>
         </button>
     {% endif %}
 </div>
