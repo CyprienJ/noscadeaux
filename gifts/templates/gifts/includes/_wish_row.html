@@ -109,8 +109,9 @@
 
         {% if not item.is_shared_wish and not is_surprise and is_owner and not item.gift.is_draft %}
             <button class="nc-wish-offer-btn"
+                    title="{% trans 'The gift will be removed from your list and saved in history.' %}"
                     onclick="markReceived('{% url 'mark_received' gift_id=item.gift.id %}', {{ from_group_id|default:'null' }})">
-                <i class="bi bi-check2-circle"></i><span class="nc-btn-label">{% trans "Received!" %}</span>
+                <i class="bi bi-check2-circle"></i><span class="nc-btn-label">{% trans "Mark as received" %}</span>
             </button>
         {% endif %}
 

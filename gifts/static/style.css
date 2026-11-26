@@ -2191,12 +2191,12 @@ body {
 
 .nc-wish-offer-btn {
     display: inline-flex; align-items: center; gap: 7px; padding: 8px 20px;
-    border-radius: 99px; border: 1.5px solid var(--nc-accent-mid); background: var(--nc-accent-light);
+    border-radius: 99px; border: 1.5px solid var(--nc-accent-mid); background: transparent;
     color: var(--nc-accent); font-size: 13px; font-weight: 500; cursor: pointer;
     font-family: 'DM Sans', sans-serif; transition: all 0.15s; flex-shrink: 0; white-space: nowrap;
     overflow: visible; min-width: max-content;
 }
-.nc-wish-offer-btn:hover { background: var(--nc-accent-mid); }
+.nc-wish-offer-btn:hover { background: var(--nc-accent-light); }
 .nc-wish-offer-btn .nc-btn-label { display: inline; }
 
 .nc-wish-more-btn {
