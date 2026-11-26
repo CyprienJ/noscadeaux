@@ -519,7 +519,7 @@ def dashboard(request):
     )
     my_reservations = my_reservations_qs.select_related(
         "gift", "gift__owner", "gift__shared_list", "gift__group_reserved_on"
-    ).order_by("-created_at")[:4]
+    ).order_by("-created_at")
     recent_group_gifts = (
         Gift.objects.filter(
             visible_in__members=request.user,
@@ -1055,7 +1055,7 @@ def notification_center(request):
             reserver=request.user, gift__offered=False, gift__is_draft=False, gift__event_list__isnull=True
         )
         .select_related("gift", "gift__owner", "gift__shared_list", "gift__group_reserved_on")
-        .order_by("-created_at")[:8]
+        .order_by("-created_at")
     )
 
     return render(
