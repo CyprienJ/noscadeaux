@@ -978,6 +978,12 @@ body {
     color: var(--nc-text);
 }
 
+/* All reservations are listed; scroll past ~5 rows so the card stays compact */
+#dashboardReservationsRows {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
 .nc-dashboard-reservations-placeholder {
     width: 100%;
     min-height: 62px;
